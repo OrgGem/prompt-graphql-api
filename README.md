@@ -1,6 +1,7 @@
 # PromptQL MCP Server
 
-Connect [Hasura PromptQL](https://hasura.io/promptql/) to AI assistants like Claude using the Model Context Protocol (MCP).
+Status: Unstable and only for PromptQL v1. Alpha release coming soon for PromptQL v2. 
+
 
 ## Overview
 

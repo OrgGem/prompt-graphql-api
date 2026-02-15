@@ -82,6 +82,8 @@ export PROMPTQL_API_KEY="your-api-key"
 export PROMPTQL_PLAYGROUND_URL="your-playground-url"
 export PROMPTQL_AUTH_TOKEN="your-auth-token"
 export PROMPTQL_AUTH_MODE="public"  # or "private"
+export PROMPTQL_HASURA_GRAPHQL_ENDPOINT="http://localhost:8080/v1/graphql"  # optional for query_hasura_ce
+export PROMPTQL_HASURA_ADMIN_SECRET="your-hasura-admin-secret"                # optional
 ```
 
 2. Test the server:
@@ -176,6 +178,7 @@ The server exposes the following MCP tools:
 ### Configuration
 - **setup_config** - Configure PromptQL API key, playground URL, DDN Auth Token, and authentication mode (public/private)
 - **check_config** - Verify the current configuration status including authentication mode
+- **query_hasura_ce** - Prompt-driven query flow for Hasura CE v2 (metadata -> planner -> GraphQL -> synthesized answer)
 
 ## Usage Examples
 
@@ -475,6 +478,20 @@ promptql-mcp/
 ├── setup.py                 # Package configuration
 └── README.md                # Documentation
 ```
+
+### Mockup Test with Hasura CE v2 + Test DB Container
+
+To validate the CE-v2 flow (metadata -> planner -> GraphQL -> answer synthesis), run:
+
+```bash
+chmod +x tests/mockup/run_hasura_mockup_tests.sh
+tests/mockup/run_hasura_mockup_tests.sh
+```
+
+This starts:
+- Postgres test DB (seeded with `customers` table)
+- Hasura CE v2 container
+- integration test: `tests/test_hasura_ce_container_mockup.py`
 
 ### Contributing
 

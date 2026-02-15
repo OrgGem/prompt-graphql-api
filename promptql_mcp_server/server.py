@@ -5,6 +5,8 @@ from typing import Optional
 import logging
 
 from promptql_mcp_server.api.promptql_client import PromptQLClient
+from promptql_mcp_server.api.hasura_ce_client import HasuraCEClient
+from promptql_mcp_server.api.hasura_query_planner import plan_prompt_to_graphql, synthesize_answer
 from promptql_mcp_server.config import ConfigManager
 
 # Ensure logger is configured to output to stderr
@@ -31,9 +33,30 @@ def _get_promptql_client() -> PromptQLClient:
     return PromptQLClient(api_key=api_key, playground_url=playground_url, auth_token=auth_token, auth_mode=auth_mode)
 
 
+def _get_hasura_ce_client(
+    graphql_endpoint: Optional[str] = None,
+    admin_secret: Optional[str] = None
+) -> HasuraCEClient:
+    endpoint = graphql_endpoint or config.get("hasura_graphql_endpoint")
+    secret = admin_secret or config.get("hasura_admin_secret")
+    if not endpoint:
+        raise ValueError(
+            "Hasura GraphQL endpoint must be configured. "
+            "Use query_hasura_ce argument 'graphql_endpoint' or set PROMPTQL_HASURA_GRAPHQL_ENDPOINT."
+        )
+    return HasuraCEClient(graphql_endpoint=endpoint, admin_secret=secret)
+
+
 
 @mcp.tool(name="setup_config")
-def setup_config(api_key: str, playground_url: str, auth_token: str, auth_mode: str = "public") -> dict:
+def setup_config(
+    api_key: str,
+    playground_url: str,
+    auth_token: str,
+    auth_mode: str = "public",
+    hasura_graphql_endpoint: Optional[str] = None,
+    hasura_admin_secret: Optional[str] = None
+) -> dict:
     """
     Configure the PromptQL MCP server with API key, playground URL, and auth token.
 
@@ -42,6 +65,8 @@ def setup_config(api_key: str, playground_url: str, auth_token: str, auth_mode: 
         playground_url: PromptQL playground URL (e.g., https://promptql.<dataplane-name>.private-ddn.hasura.app/playground)
         auth_token: DDN Auth Token for accessing your data
         auth_mode: Authentication mode - "public" for Auth-Token or "private" for x-hasura-ddn-token (default: "public")
+        hasura_graphql_endpoint: Optional Hasura CE v2 GraphQL endpoint (e.g. http://localhost:8080/v1/graphql)
+        hasura_admin_secret: Optional Hasura admin secret
 
     Returns:
         Configuration result with success status and details
@@ -69,6 +94,10 @@ def setup_config(api_key: str, playground_url: str, auth_token: str, auth_mode: 
     config.set("playground_url", playground_url)
     config.set("auth_token", auth_token)
     config.set("auth_mode", auth_mode.lower())
+    if hasura_graphql_endpoint:
+        config.set("hasura_graphql_endpoint", hasura_graphql_endpoint)
+    if hasura_admin_secret:
+        config.set("hasura_admin_secret", hasura_admin_secret)
 
     logger.info("CONFIGURATION SAVED SUCCESSFULLY")
     return {
@@ -78,7 +107,9 @@ def setup_config(api_key: str, playground_url: str, auth_token: str, auth_mode: 
             "api_key": masked_key,
             "playground_url": playground_url,
             "auth_token": masked_token,
-            "auth_mode": auth_mode.lower()
+            "auth_mode": auth_mode.lower(),
+            "hasura_graphql_endpoint": hasura_graphql_endpoint,
+            "hasura_admin_secret": bool(hasura_admin_secret)
         }
     }
 
@@ -99,6 +130,8 @@ def check_config() -> dict:
     playground_url = config.get("playground_url")
     auth_token = config.get("auth_token")
     auth_mode = config.get_auth_mode()
+    hasura_graphql_endpoint = config.get("hasura_graphql_endpoint")
+    hasura_admin_secret = config.get("hasura_admin_secret")
 
     if api_key and playground_url and auth_token:
         masked_key = api_key[:5] + "..." + api_key[-5:] if api_key else "None"
@@ -111,7 +144,9 @@ def check_config() -> dict:
                 "api_key": masked_key,
                 "playground_url": playground_url,
                 "auth_token": masked_token,
-                "auth_mode": auth_mode
+                "auth_mode": auth_mode,
+                "hasura_graphql_endpoint": hasura_graphql_endpoint,
+                "hasura_admin_secret_configured": bool(hasura_admin_secret)
             },
             "missing_items": []
         }
@@ -131,7 +166,9 @@ def check_config() -> dict:
             "configuration": {
                 "api_key": api_key[:5] + "..." + api_key[-5:] if api_key else None,
                 "playground_url": playground_url,
-                "auth_token": auth_token[:8] + "..." + auth_token[-4:] if auth_token and len(auth_token) > 12 else auth_token[:4] + "..." if auth_token else None
+                "auth_token": auth_token[:8] + "..." + auth_token[-4:] if auth_token and len(auth_token) > 12 else auth_token[:4] + "..." if auth_token else None,
+                "hasura_graphql_endpoint": hasura_graphql_endpoint,
+                "hasura_admin_secret_configured": bool(hasura_admin_secret)
             },
             "missing_items": missing
         }
@@ -728,6 +765,53 @@ def get_artifact(thread_id: str, artifact_id: str) -> dict:
             "error": f"Get artifact error: {str(e)}",
             "thread_id": thread_id,
             "artifact_id": artifact_id
+        }
+
+
+@mcp.tool(name="query_hasura_ce")
+def query_hasura_ce(
+    prompt: str,
+    graphql_endpoint: Optional[str] = None,
+    admin_secret: Optional[str] = None,
+    role: Optional[str] = None,
+    max_limit: int = 100
+) -> dict:
+    """
+    Execute a prompt-driven Hasura CE v2 query flow:
+    metadata -> planner -> GraphQL -> answer synthesis.
+    """
+    logger.info("=" * 80)
+    logger.info("TOOL CALL: query_hasura_ce")
+    logger.info(f"Prompt: '{prompt}'")
+    logger.info("=" * 80)
+
+    try:
+        hasura = _get_hasura_ce_client(graphql_endpoint=graphql_endpoint, admin_secret=admin_secret)
+        metadata = hasura.export_metadata()
+        plan = plan_prompt_to_graphql(prompt=prompt, metadata=metadata, max_limit=max_limit)
+
+        if not plan.get("success"):
+            return {
+                "success": False,
+                "error": plan.get("error", "Could not create query plan."),
+                "plan": plan,
+            }
+
+        graphql_result = hasura.execute_graphql(query=plan["query"], role=role)
+        answer = synthesize_answer(prompt=prompt, selected_table=plan["selected_table"], graphql_result=graphql_result)
+
+        return {
+            "success": True,
+            "prompt": prompt,
+            "answer": answer,
+            "plan": plan,
+            "graphql_result": graphql_result,
+        }
+    except Exception as e:
+        logger.error(f"ERROR in query_hasura_ce: {str(e)}")
+        return {
+            "success": False,
+            "error": f"query_hasura_ce error: {str(e)}",
         }
 
 @mcp.prompt(name="data_analysis")

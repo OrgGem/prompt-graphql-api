@@ -1,10 +1,10 @@
 services:
-  promptql-mcp:
+  prompt-graphql-server:
     build:
       context: .
       dockerfile: Dockerfile
-    image: promptql-mcp-server:local
-    container_name: promptql-mcp-server
+    image: prompt-graphql-server:local
+    container_name: prompt-graphql-server
     restart: unless-stopped
     environment:
       PROMPTQL_API_KEY: ${PROMPTQL_API_KEY:-}

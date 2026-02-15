@@ -527,6 +527,33 @@ Docker env readiness for mockup stack:
    - CI pipeline for lint/test + image build + vulnerability scan.
    - Tagging strategy: `vX.Y.Z`, `sha-<short>`, and `latest` (optional).
 
+### DevOps Implementation (Container + Compose)
+
+The repository now includes:
+- `Dockerfile` for `promptql-mcp-server` runtime image
+- `.dockerignore` for lean image builds
+- `docker-compose.yml`:
+  - `promptql-mcp` service (default)
+  - optional `sample-hasura` profile with `postgres` + `hasura`
+- `.env.devops.example` template for compose variables
+
+Build and run app container:
+
+```bash
+cp .env.devops.example .env  # optional
+docker compose build promptql-mcp
+docker compose up promptql-mcp
+```
+
+Run app + sample Hasura CE stack:
+
+```bash
+cp .env.devops.example .env  # optional
+docker compose --profile sample-hasura up --build
+```
+
+Note: The sample Hasura stack is for local/dev testing only. Do not use default credentials in non-local environments.
+
 ### Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

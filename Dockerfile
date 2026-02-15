@@ -10,7 +10,7 @@ COPY promptql_mcp_server ./promptql_mcp_server
 
 RUN pip install --no-cache-dir .
 
-RUN useradd --create-home --shell /usr/sbin/nologin appuser && chown -R appuser:appuser /app
+RUN useradd --create-home appuser && chown -R appuser:appuser /app
 USER appuser
 
 ENTRYPOINT ["python", "-m", "promptql_mcp_server", "run"]

@@ -548,7 +548,8 @@ docker compose up promptql-mcp
 Run app + sample Hasura CE stack:
 
 ```bash
-cp .env.devops.example .env  # optional
+cp .env.devops.example .env
+# set POSTGRES_PASSWORD and HASURA_GRAPHQL_ADMIN_SECRET in .env before first run
 docker compose --profile sample-hasura up --build
 ```
 

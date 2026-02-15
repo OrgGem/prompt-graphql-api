@@ -332,6 +332,28 @@ Recommended request flow:
 
 `Client -> API Gateway -> Prompt Orchestrator -> Metadata Service (cache) -> LLM Query Planner -> GraphQL Builder/Guardrails -> Hasura -> LLM Response Synthesizer -> Client`
 
+### Hasura CE v2.x Compatibility Notes (Important)
+
+If your source-of-truth data layer is **Hasura CE v2.x (latest)**, keep the following constraints in scope during implementation:
+
+- Use Hasura v2 capabilities as the execution backbone:
+  - GraphQL query/mutation/subscription over tracked sources
+  - Hasura metadata APIs for schema models, relationships, permissions, and naming
+  - Role-based access control enforced at Hasura layer
+- Do **not** assume PromptQL/NL features are provided by Hasura CE v2 itself.
+  - Natural-language understanding, query planning, and answer synthesis remain application-layer responsibilities (LLM services in your backend).
+- Plan around CE v2 operational boundaries:
+  - no dependence on DDN-only managed features
+  - no dependence on metadata semantics that exist only in newer product lines
+  - enforce guardrails (depth/row/time limits) in your own backend before sending GraphQL to Hasura
+
+Practical implementation guidance for CE v2:
+
+1. Treat Hasura metadata as schema context input to LLM (not as an NL query engine).
+2. Keep an adapter layer that maps normalized metadata -> planner context -> GraphQL builder.
+3. Validate every generated query against CE-safe rules before execution.
+4. Keep fallback templates for unsupported/ambiguous prompts instead of issuing unsafe broad queries.
+
 ### Detailed Development Plan (Draft)
 
 - **Phase 1: Foundation**
@@ -362,6 +384,7 @@ Recommended request flow:
   - Add SLOs, autoscaling strategy, circuit breakers, and graceful degradation
   - Add cost controls (token budgets, caching, configurable model tiers)
   - Roll out progressively with canary traffic and feedback loop
+  - Maintain a CE v2 compatibility checklist to prevent accidental adoption of non-CE features
 
 ## Troubleshooting
 

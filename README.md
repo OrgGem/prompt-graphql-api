@@ -501,7 +501,7 @@ Current implementation status against the phased plan:
 - ✅ Phase 2/3/4 baseline path exists: metadata export, simple planner, GraphQL execution, synthesized answer.
 - ✅ CE v2 compatibility is respected (no DDN-only dependency in the new `query_hasura_ce` flow).
 - ✅ Mockup integration test proves end-to-end local execution with Hasura CE + Postgres.
-- ⚠️ Planner is currently minimal (keyword-to-table + count aggregate). Advanced intent handling from later phases is not implemented yet.
+- ⚠️ Planner is currently minimal (keyword-to-table + count aggregate). Advanced intent handling from later phases (see **Detailed Development Plan** above) is not implemented yet.
 - ⚠️ Guardrails are basic (`max_limit` clamp). Depth/cost policy and stricter allowlist are still roadmap items.
 
 Docker env readiness for mockup stack:

@@ -484,6 +484,7 @@ promptql-mcp/
 To validate the CE-v2 flow (metadata -> planner -> GraphQL -> answer synthesis), run:
 
 ```bash
+cp tests/mockup/.env.example tests/mockup/.env  # optional, to customize ports/secrets
 chmod +x tests/mockup/run_hasura_mockup_tests.sh
 tests/mockup/run_hasura_mockup_tests.sh
 ```
@@ -492,6 +493,39 @@ This starts:
 - Postgres test DB (seeded with `customers` table)
 - Hasura CE v2 container
 - integration test: `tests/test_hasura_ce_container_mockup.py`
+
+### DevOps Review: Scope Fit vs Plan and Docker Readiness
+
+Current implementation status against the phased plan:
+
+- ✅ Phase 2/3/4 baseline path exists: metadata export, simple planner, GraphQL execution, synthesized answer.
+- ✅ CE v2 compatibility is respected (no DDN-only dependency in the new `query_hasura_ce` flow).
+- ✅ Mockup integration test proves end-to-end local execution with Hasura CE + Postgres.
+- ⚠️ Planner is currently minimal (keyword-to-table + count aggregate). Advanced intent handling from later phases is not implemented yet.
+- ⚠️ Guardrails are basic (`max_limit` clamp). Depth/cost policy and stricter allowlist are still roadmap items.
+
+Docker env readiness for mockup stack:
+
+- Required for startup (with defaults provided in compose):
+  - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
+  - `HASURA_PORT`, `HASURA_GRAPHQL_ADMIN_SECRET`
+- Optional tuning:
+  - `HASURA_GRAPHQL_ENABLE_CONSOLE`, `HASURA_GRAPHQL_DEV_MODE`, `HASURA_GRAPHQL_ENABLED_LOG_TYPES`
+  - `HASURA_GRAPHQL_DATABASE_URL` (override auto default)
+- Source of truth template: `tests/mockup/.env.example`
+
+### Next DevOps Plan: Build Complete Image(s)
+
+1. **App image**
+   - Build `promptql-mcp-server` image (python slim, non-root user, healthcheck).
+   - Inject runtime config via env vars (no secrets baked into image).
+2. **Optional sample Hasura profile**
+   - Keep app-only compose as default.
+   - Add optional profile/service for Hasura + Postgres sample stack.
+3. **Release & CI**
+   - Multi-stage build, pinned base tag, dependency cache.
+   - CI pipeline for lint/test + image build + vulnerability scan.
+   - Tagging strategy: `vX.Y.Z`, `sha-<short>`, and `latest` (optional).
 
 ### Contributing
 

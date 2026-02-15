@@ -354,6 +354,32 @@ Practical implementation guidance for CE v2:
 3. Validate every generated query against CE-safe rules before execution.
 4. Keep fallback templates for unsupported/ambiguous prompts instead of issuing unsafe broad queries.
 
+#### Phase-by-phase CE v2 Compatibility Checklist
+
+- **Phase 1: Foundation (CE-safe scope)**
+  - API contracts only expose capabilities backed by CE v2 GraphQL + metadata.
+  - Error model distinguishes:
+    - unsupported by CE v2
+    - unsupported by current app implementation
+- **Phase 2: Metadata Context Pipeline**
+  - Metadata fetcher reads only CE v2 metadata endpoints and tracked-source schema.
+  - Normalizer does not depend on DDN-specific metadata semantics.
+- **Phase 3: LLM Query Planning**
+  - Planner output schema is constrained to CE-executable query patterns.
+  - Any planned operation outside CE-safe policy is rejected before GraphQL generation.
+- **Phase 4: Query Guardrails + Execution**
+  - GraphQL builder only emits CE v2-compatible queries for tracked entities/relationships.
+  - Guardrails enforce depth/rows/timeout and block broad scans.
+- **Phase 5: Answer Synthesis**
+  - Response synthesis uses only fields returned by CE v2 execution (no hidden enrichments).
+  - Unsupported prompt intents return deterministic fallback responses.
+- **Phase 6: Quality & Security**
+  - Add compatibility tests for planner outputs that must be rejected under CE constraints.
+  - Add regression tests for role/permission behavior as enforced by Hasura CE v2 RBAC.
+- **Phase 7: Production Readiness**
+  - Release checklist explicitly verifies no DDN-only feature flags or assumptions are enabled.
+  - Monitoring includes CE-compatibility error classes for fast detection of scope drift.
+
 ### Detailed Development Plan (Draft)
 
 - **Phase 1: Foundation**

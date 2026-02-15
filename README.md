@@ -291,6 +291,78 @@ This integration follows a client-server architecture:
 
 The server translates between the MCP protocol and PromptQL's API, allowing seamless integration between AI assistants and your enterprise data.
 
+### Backend Architecture Blueprint: Prompt Query API + Hasura Metadata
+
+For a backend API service that receives prompt queries (search/Q&A), uses an LLM to decide GraphQL queries based on metadata, then post-processes and returns final answers, use the following architecture:
+
+1. **API Gateway / BFF Layer**
+   - Exposes REST endpoints (e.g., `POST /v1/query`, `POST /v1/query/stream`)
+   - Handles authentication, rate limiting, request validation, and tracing IDs
+2. **Prompt Orchestrator Service**
+   - Classifies intent (lookup, aggregation, comparison, explain)
+   - Coordinates metadata retrieval, query planning, execution, and answer synthesis
+   - Applies policy checks before any generated query is executed
+3. **Metadata Service (Hasura-first)**
+   - Reads Hasura metadata (models, relationships, permissions, naming, docs)
+   - Builds a normalized schema context for LLM consumption
+   - Caches metadata snapshots and refreshes on schedule/webhook
+4. **LLM Query Planner**
+   - Converts user prompt + schema context into a constrained query plan:
+     - target entities/fields
+     - filters/sort/limit
+     - confidence and fallback strategy
+   - Produces structured output (JSON) instead of raw GraphQL text when possible
+5. **GraphQL Builder + Guardrails**
+   - Translates structured plan into GraphQL
+   - Enforces allowlist/denylist, max depth, max row limit, timeout budget
+   - Prevents disallowed operations (sensitive fields, broad scans)
+6. **Hasura GraphQL Execution Layer**
+   - Executes GraphQL against Hasura (single source for DB connectivity and RBAC)
+   - Reuses Hasura permissions to keep data access centralized
+7. **LLM Response Synthesizer**
+   - Converts raw query results into natural-language answer
+   - Supports output modes: concise answer, markdown table, JSON payload
+   - Adds provenance (queried entities, filters, timestamp)
+8. **Observability + Safety**
+   - Structured logs (prompt hash, chosen entities, latency stages)
+   - Metrics (token usage, query latency, cache hit rate, error classes)
+   - Optional human-review or fallback templates for low-confidence answers
+
+Recommended request flow:
+
+`Client -> API Gateway -> Prompt Orchestrator -> Metadata Service (cache) -> LLM Query Planner -> GraphQL Builder/Guardrails -> Hasura -> LLM Response Synthesizer -> Client`
+
+### Detailed Development Plan (Draft)
+
+- **Phase 1: Foundation**
+  - Define API contracts (`/v1/query`, `/v1/query/stream`, `/v1/schema/context`)
+  - Add auth, request validation, correlation IDs, error envelope format
+  - Set up logging/metrics/tracing baseline
+- **Phase 2: Metadata Context Pipeline**
+  - Implement Hasura metadata fetcher + normalizer
+  - Add cache (TTL + manual refresh) and versioning
+  - Create schema summarization for token-efficient LLM prompts
+- **Phase 3: LLM Query Planning**
+  - Design planner prompt template and JSON schema output
+  - Implement intent detection and plan validation
+  - Add retry strategy for invalid/ambiguous plans
+- **Phase 4: Query Guardrails + Execution**
+  - Build GraphQL generator from planner JSON
+  - Enforce limits (depth, cost, timeout, max rows, field restrictions)
+  - Execute via Hasura and standardize error mapping
+- **Phase 5: Answer Synthesis**
+  - Build response templates (Q&A, table, summary, compare)
+  - Add citation/provenance block and confidence score
+  - Support multilingual answers and deterministic formatting options
+- **Phase 6: Quality & Security**
+  - Add golden tests for prompt -> plan -> query -> answer pipeline
+  - Add adversarial tests (prompt injection, over-broad query attempts)
+  - Add PII masking/redaction in logs and strict secret handling
+- **Phase 7: Production Readiness**
+  - Add SLOs, autoscaling strategy, circuit breakers, and graceful degradation
+  - Add cost controls (token budgets, caching, configurable model tiers)
+  - Roll out progressively with canary traffic and feedback loop
+
 ## Troubleshooting
 
 ### Command not found: pip or python

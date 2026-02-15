@@ -31,6 +31,8 @@ def main():
     setup_parser.add_argument("--auth-token", required=True, help="DDN Auth Token")
     setup_parser.add_argument("--auth-mode", default="public", choices=["public", "private"],
                              help="Authentication mode: 'public' for Auth-Token or 'private' for x-hasura-ddn-token (default: public)")
+    setup_parser.add_argument("--hasura-graphql-endpoint", required=False, help="Optional Hasura CE v2 GraphQL endpoint")
+    setup_parser.add_argument("--hasura-admin-secret", required=False, help="Optional Hasura CE v2 admin secret")
 
     # Run command (default)
     run_parser = subparsers.add_parser("run", help="Run the server")
@@ -42,6 +44,10 @@ def main():
         config.set("playground_url", args.playground_url)
         config.set("auth_token", args.auth_token)
         config.set("auth_mode", args.auth_mode)
+        if args.hasura_graphql_endpoint:
+            config.set("hasura_graphql_endpoint", args.hasura_graphql_endpoint)
+        if args.hasura_admin_secret:
+            config.set("hasura_admin_secret", args.hasura_admin_secret)
         logger.info(f"Configuration saved successfully with auth_mode: {args.auth_mode}")
         return 0
     

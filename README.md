@@ -82,6 +82,8 @@ export PROMPTQL_API_KEY="your-api-key"
 export PROMPTQL_PLAYGROUND_URL="your-playground-url"
 export PROMPTQL_AUTH_TOKEN="your-auth-token"
 export PROMPTQL_AUTH_MODE="public"  # or "private"
+export PROMPTQL_HASURA_GRAPHQL_ENDPOINT="http://localhost:8080/v1/graphql"  # optional for query_hasura_ce
+export PROMPTQL_HASURA_ADMIN_SECRET="your-hasura-admin-secret"                # optional
 ```
 
 2. Test the server:
@@ -176,6 +178,7 @@ The server exposes the following MCP tools:
 ### Configuration
 - **setup_config** - Configure PromptQL API key, playground URL, DDN Auth Token, and authentication mode (public/private)
 - **check_config** - Verify the current configuration status including authentication mode
+- **query_hasura_ce** - Prompt-driven query flow for Hasura CE v2 (metadata -> planner -> GraphQL -> synthesized answer)
 
 ## Usage Examples
 
@@ -291,6 +294,127 @@ This integration follows a client-server architecture:
 
 The server translates between the MCP protocol and PromptQL's API, allowing seamless integration between AI assistants and your enterprise data.
 
+### Backend Architecture Blueprint: Prompt Query API + Hasura Metadata
+
+For a backend API service that receives prompt queries (search/Q&A), uses an LLM to decide GraphQL queries based on metadata, then post-processes and returns final answers, use the following architecture:
+
+1. **API Gateway / BFF Layer**
+   - Exposes REST endpoints (e.g., `POST /v1/query`, `POST /v1/query/stream`)
+   - Handles authentication, rate limiting, request validation, and tracing IDs
+2. **Prompt Orchestrator Service**
+   - Classifies intent (lookup, aggregation, comparison, explain)
+   - Coordinates metadata retrieval, query planning, execution, and answer synthesis
+   - Applies policy checks before any generated query is executed
+3. **Metadata Service (Hasura-first)**
+   - Reads Hasura metadata (models, relationships, permissions, naming, docs)
+   - Builds a normalized schema context for LLM consumption
+   - Caches metadata snapshots and refreshes on schedule/webhook
+4. **LLM Query Planner**
+   - Converts user prompt + schema context into a constrained query plan:
+     - target entities/fields
+     - filters/sort/limit
+     - confidence and fallback strategy
+   - Produces structured output (JSON) instead of raw GraphQL text when possible
+5. **GraphQL Builder + Guardrails**
+   - Translates structured plan into GraphQL
+   - Enforces allowlist/denylist, max depth, max row limit, timeout budget
+   - Prevents disallowed operations (sensitive fields, broad scans)
+6. **Hasura GraphQL Execution Layer**
+   - Executes GraphQL against Hasura (single source for DB connectivity and RBAC)
+   - Reuses Hasura permissions to keep data access centralized
+7. **LLM Response Synthesizer**
+   - Converts raw query results into natural-language answer
+   - Supports output modes: concise answer, markdown table, JSON payload
+   - Adds provenance (queried entities, filters, timestamp)
+8. **Observability + Safety**
+   - Structured logs (prompt hash, chosen entities, latency stages)
+   - Metrics (token usage, query latency, cache hit rate, error classes)
+   - Optional human-review or fallback templates for low-confidence answers
+
+Recommended request flow:
+
+`Client -> API Gateway -> Prompt Orchestrator -> Metadata Service (cache) -> LLM Query Planner -> GraphQL Builder/Guardrails -> Hasura -> LLM Response Synthesizer -> Client`
+
+### Hasura CE v2.x Compatibility Notes (Important)
+
+If your source-of-truth data layer is **Hasura CE v2.x (latest)**, keep the following constraints in scope during implementation:
+
+- Use Hasura v2 capabilities as the execution backbone:
+  - GraphQL query/mutation/subscription over tracked sources
+  - Hasura metadata APIs for schema models, relationships, permissions, and naming
+  - Role-based access control enforced at Hasura layer
+- Do **not** assume PromptQL/NL features are provided by Hasura CE v2 itself.
+  - Natural-language understanding, query planning, and answer synthesis remain application-layer responsibilities (LLM services in your backend).
+- Plan around CE v2 operational boundaries:
+  - no dependence on DDN-only managed features
+  - no dependence on metadata semantics that exist only in newer product lines
+  - enforce guardrails (depth/row/time limits) in your own backend before sending GraphQL to Hasura
+
+Practical implementation guidance for CE v2:
+
+1. Treat Hasura metadata as schema context input to LLM (not as an NL query engine).
+2. Keep an adapter layer that maps normalized metadata -> planner context -> GraphQL builder.
+3. Validate every generated query against CE-safe rules before execution.
+4. Keep fallback templates for unsupported/ambiguous prompts instead of issuing unsafe broad queries.
+
+#### Phase-by-phase CE v2 Compatibility Checklist
+
+- **Phase 1: Foundation (CE-safe scope)**
+  - API contracts only expose capabilities backed by CE v2 GraphQL + metadata.
+  - Error model distinguishes:
+    - unsupported by CE v2
+    - unsupported by current app implementation
+- **Phase 2: Metadata Context Pipeline**
+  - Metadata fetcher reads only CE v2 metadata endpoints and tracked-source schema.
+  - Normalizer does not depend on DDN-specific metadata semantics.
+- **Phase 3: LLM Query Planning**
+  - Planner output schema is constrained to CE-executable query patterns.
+  - Any planned operation outside CE-safe policy is rejected before GraphQL generation.
+- **Phase 4: Query Guardrails + Execution**
+  - GraphQL builder only emits CE v2-compatible queries for tracked entities/relationships.
+  - Guardrails enforce depth/rows/timeout and block broad scans.
+- **Phase 5: Answer Synthesis**
+  - Response synthesis uses only fields returned by CE v2 execution (no hidden enrichments).
+  - Unsupported prompt intents return deterministic fallback responses.
+- **Phase 6: Quality & Security**
+  - Add compatibility tests for planner outputs that must be rejected under CE constraints.
+  - Add regression tests for role/permission behavior as enforced by Hasura CE v2 RBAC.
+- **Phase 7: Production Readiness**
+  - Release checklist explicitly verifies no DDN-only feature flags or assumptions are enabled.
+  - Monitoring includes CE-compatibility error classes for fast detection of scope drift.
+
+### Detailed Development Plan (Draft)
+
+- **Phase 1: Foundation**
+  - Define API contracts (`/v1/query`, `/v1/query/stream`, `/v1/schema/context`)
+  - Add auth, request validation, correlation IDs, error envelope format
+  - Set up logging/metrics/tracing baseline
+- **Phase 2: Metadata Context Pipeline**
+  - Implement Hasura metadata fetcher + normalizer
+  - Add cache (TTL + manual refresh) and versioning
+  - Create schema summarization for token-efficient LLM prompts
+- **Phase 3: LLM Query Planning**
+  - Design planner prompt template and JSON schema output
+  - Implement intent detection and plan validation
+  - Add retry strategy for invalid/ambiguous plans
+- **Phase 4: Query Guardrails + Execution**
+  - Build GraphQL generator from planner JSON
+  - Enforce limits (depth, cost, timeout, max rows, field restrictions)
+  - Execute via Hasura and standardize error mapping
+- **Phase 5: Answer Synthesis**
+  - Build response templates (Q&A, table, summary, compare)
+  - Add citation/provenance block and confidence score
+  - Support multilingual answers and deterministic formatting options
+- **Phase 6: Quality & Security**
+  - Add golden tests for prompt -> plan -> query -> answer pipeline
+  - Add adversarial tests (prompt injection, over-broad query attempts)
+  - Add PII masking/redaction in logs and strict secret handling
+- **Phase 7: Production Readiness**
+  - Add SLOs, autoscaling strategy, circuit breakers, and graceful degradation
+  - Add cost controls (token budgets, caching, configurable model tiers)
+  - Roll out progressively with canary traffic and feedback loop
+  - Maintain a CE v2 compatibility checklist to prevent accidental adoption of non-CE features
+
 ## Troubleshooting
 
 ### Command not found: pip or python
@@ -354,6 +478,82 @@ promptql-mcp/
 ├── setup.py                 # Package configuration
 └── README.md                # Documentation
 ```
+
+### Mockup Test with Hasura CE v2 + Test DB Container
+
+To validate the CE-v2 flow (metadata -> planner -> GraphQL -> answer synthesis), run:
+
+```bash
+cp tests/mockup/.env.example tests/mockup/.env  # optional, to customize ports/secrets
+chmod +x tests/mockup/run_hasura_mockup_tests.sh
+tests/mockup/run_hasura_mockup_tests.sh
+```
+
+This starts:
+- Postgres test DB (seeded with `customers` table)
+- Hasura CE v2 container
+- integration test: `tests/test_hasura_ce_container_mockup.py`
+
+### DevOps Review: Scope Fit vs Plan and Docker Readiness
+
+Current implementation status against the phased plan:
+
+- ✅ Phase 2/3/4 baseline path exists: metadata export, simple planner, GraphQL execution, synthesized answer.
+- ✅ CE v2 compatibility is respected (no DDN-only dependency in the new `query_hasura_ce` flow).
+- ✅ Mockup integration test proves end-to-end local execution with Hasura CE + Postgres.
+- ⚠️ Planner is currently minimal (keyword-to-table + count aggregate). Advanced intent handling from later phases (see **Detailed Development Plan** above) is not implemented yet.
+- ⚠️ Guardrails are basic (`max_limit` clamp). Depth/cost policy and stricter allowlist are still roadmap items.
+
+Docker env readiness for mockup stack:
+
+- Required for startup (with defaults provided in compose):
+  - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
+  - `HASURA_PORT`, `HASURA_GRAPHQL_ADMIN_SECRET`
+- Optional tuning:
+  - `HASURA_GRAPHQL_ENABLE_CONSOLE`, `HASURA_GRAPHQL_DEV_MODE`, `HASURA_GRAPHQL_ENABLED_LOG_TYPES`
+  - `HASURA_GRAPHQL_DATABASE_URL` (override auto default)
+- Source of truth template: `tests/mockup/.env.example`
+
+### Next DevOps Plan: Build Complete Image(s)
+
+1. **App image**
+   - Build `promptql-mcp-server` image (python slim, non-root user, healthcheck).
+   - Inject runtime config via env vars (no secrets baked into image).
+2. **Optional sample Hasura profile**
+   - Keep app-only compose as default.
+   - Add optional profile/service for Hasura + Postgres sample stack.
+3. **Release & CI**
+   - Multi-stage build, pinned base tag, dependency cache.
+   - CI pipeline for lint/test + image build + vulnerability scan.
+   - Tagging strategy: `vX.Y.Z`, `sha-<short>`, and `latest` (optional).
+
+### DevOps Implementation (Container + Compose)
+
+The repository now includes:
+- `Dockerfile` for `promptql-mcp-server` runtime image
+- `.dockerignore` for lean image builds
+- `docker-compose.yml`:
+  - `promptql-mcp` service (default)
+  - optional `sample-hasura` profile with `postgres` + `hasura`
+- `.env.devops.example` template for compose variables
+
+Build and run app container:
+
+```bash
+cp .env.devops.example .env  # optional
+docker compose build promptql-mcp
+docker compose up promptql-mcp
+```
+
+Run app + sample Hasura CE stack:
+
+```bash
+cp .env.devops.example .env
+# set POSTGRES_PASSWORD and HASURA_GRAPHQL_ADMIN_SECRET in .env before first run
+docker compose --profile sample-hasura up --build
+```
+
+Note: The sample Hasura stack is for local/dev testing only. Do not use default credentials in non-local environments.
 
 ### Contributing
 

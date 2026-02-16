@@ -155,6 +155,7 @@ function refreshData() {
     rules: loadRules,
     apps: loadApps,
     chat: loadChat,
+    style: loadStyle,
   };
   if (loaders[currentTab]) loaders[currentTab]();
   updateConfigBadge();

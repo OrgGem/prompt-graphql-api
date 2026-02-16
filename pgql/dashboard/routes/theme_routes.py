@@ -4,6 +4,7 @@
 Persists to data/theme.json alongside config.json.
 """
 
+import asyncio
 import base64
 import os
 import json
@@ -13,7 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import Optional
+from typing import Dict, Optional
 
 logger = logging.getLogger("promptql_dashboard")
 
@@ -29,6 +30,9 @@ else:
 
 _data_dir.mkdir(parents=True, exist_ok=True)
 THEME_FILE = _data_dir / "theme.json"
+
+# Lock to prevent concurrent read-modify-write races
+_theme_lock = asyncio.Lock()
 
 # --- Defaults ---
 
@@ -59,7 +63,8 @@ DEFAULT_THEME = {
 
 # --- Helpers ---
 
-_HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
+_HEX_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+_DATA_URI_RE = re.compile(r"^data:image/[a-z0-9+.-]+;base64,")
 
 
 def _load_theme() -> dict:
@@ -92,7 +97,7 @@ def _validate_color(value: str) -> bool:
 # --- Request Models ---
 
 class ThemeUpdate(BaseModel):
-    colors: Optional[dict] = None
+    colors: Optional[Dict[str, str]] = None
     font: Optional[str] = None
     app_name: Optional[str] = None
     logo_text: Optional[str] = None
@@ -125,58 +130,62 @@ async def get_theme():
 @router.put("/theme")
 async def update_theme(update: ThemeUpdate):
     """Update theme settings (partial update supported)."""
-    theme = _load_theme()
+    async with _theme_lock:
+        theme = _load_theme()
 
-    # Update colors
-    if update.colors:
-        for key, value in update.colors.items():
-            if key not in DEFAULT_THEME["colors"]:
-                raise HTTPException(400, f"Unknown color key: {key}")
-            if not _validate_color(value):
-                raise HTTPException(400, f"Invalid color format for {key}: {value}")
-            theme["colors"][key] = value
+        # Update colors
+        if update.colors:
+            for key, value in update.colors.items():
+                if key not in DEFAULT_THEME["colors"]:
+                    raise HTTPException(400, f"Unknown color key: {key}")
+                if not _validate_color(value):
+                    raise HTTPException(400, f"Invalid color format for {key}: {value}")
+                theme["colors"][key] = value
 
-    # Update font
-    if update.font is not None:
-        if update.font not in AVAILABLE_FONTS:
-            raise HTTPException(400, f"Unknown font: {update.font}. Available: {AVAILABLE_FONTS}")
-        theme["font"] = update.font
+        # Update font
+        if update.font is not None:
+            if update.font not in AVAILABLE_FONTS:
+                raise HTTPException(400, f"Unknown font: {update.font}. Available: {AVAILABLE_FONTS}")
+            theme["font"] = update.font
 
-    # Update branding
-    if update.app_name is not None:
-        name = update.app_name.strip()
-        if not name or len(name) > 30:
-            raise HTTPException(400, "App name must be 1-30 characters")
-        theme["app_name"] = name
+        # Update branding
+        if update.app_name is not None:
+            name = update.app_name.strip()
+            if not name or len(name) > 30:
+                raise HTTPException(400, "App name must be 1-30 characters")
+            theme["app_name"] = name
 
-    if update.logo_text is not None:
-        text = update.logo_text.strip()
-        if not text or len(text) > 4:
-            raise HTTPException(400, "Logo text must be 1-4 characters")
-        theme["logo_text"] = text
+        if update.logo_text is not None:
+            text = update.logo_text.strip()
+            if not text or len(text) > 4:
+                raise HTTPException(400, "Logo text must be 1-4 characters")
+            theme["logo_text"] = text
 
-    # Update logo image (base64)
-    if update.logo_base64 is not None:
-        if update.logo_base64 == "":
-            theme["logo_base64"] = None
-        else:
-            # Basic size check (~200KB max after base64)
-            if len(update.logo_base64) > 300_000:
-                raise HTTPException(400, "Logo image too large (max ~200KB)")
-            theme["logo_base64"] = update.logo_base64
+        # Update logo image (base64 data URI)
+        if update.logo_base64 is not None:
+            if update.logo_base64 == "":
+                theme["logo_base64"] = None
+            else:
+                if len(update.logo_base64) > 300_000:
+                    raise HTTPException(400, "Logo image too large (max ~200KB)")
+                if not _DATA_URI_RE.match(update.logo_base64):
+                    raise HTTPException(400, "Logo must be a data:image/... base64 URI")
+                theme["logo_base64"] = update.logo_base64
 
-    # Update favicon (base64)
-    if update.favicon_base64 is not None:
-        if update.favicon_base64 == "":
-            theme["favicon_base64"] = None
-        else:
-            if len(update.favicon_base64) > 300_000:
-                raise HTTPException(400, "Favicon image too large (max ~200KB)")
-            theme["favicon_base64"] = update.favicon_base64
+        # Update favicon (base64 data URI)
+        if update.favicon_base64 is not None:
+            if update.favicon_base64 == "":
+                theme["favicon_base64"] = None
+            else:
+                if len(update.favicon_base64) > 300_000:
+                    raise HTTPException(400, "Favicon image too large (max ~200KB)")
+                if not _DATA_URI_RE.match(update.favicon_base64):
+                    raise HTTPException(400, "Favicon must be a data:image/... base64 URI")
+                theme["favicon_base64"] = update.favicon_base64
 
-    _save_theme(theme)
-    logger.info("Theme updated and saved")
-    return {"success": True, "theme": theme}
+        _save_theme(theme)
+        logger.info("Theme updated and saved")
+        return {"success": True, "theme": theme}
 
 
 @router.delete("/theme")
@@ -190,11 +199,16 @@ async def reset_theme():
 
 # --- Dynamic Favicon ---
 
-# Default SVG favicon
-_DEFAULT_FAVICON_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#6366f1"/>
-  <text x="16" y="22" font-family="system-ui,sans-serif" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">PQ</text>
-</svg>"""
+# Default SVG favicon (explicit LF line endings for cross-platform consistency)
+_DEFAULT_FAVICON_SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    b'<rect width="32" height="32" rx="8" fill="#6366f1"/>'
+    b'<text x="16" y="22" font-family="system-ui,sans-serif" font-size="16"'
+    b' font-weight="700" fill="#fff" text-anchor="middle">PQ</text></svg>'
+)
+
+# Regex to extract MIME type from data URI header
+_MIME_RE = re.compile(r"data:(image/[a-z0-9+.-]+);base64")
 
 
 @router.get("/theme/favicon")
@@ -203,19 +217,17 @@ async def get_favicon():
     theme = _load_theme()
     favicon_b64 = theme.get("favicon_base64")
 
-    if favicon_b64:
-        # Parse data URI: "data:image/png;base64,iVBOR..."
-        if "," in favicon_b64:
-            header, data = favicon_b64.split(",", 1)
-            # Extract mime type
-            mime = "image/png"
-            if "image/" in header:
-                mime = header.split("image/")[1].split(";")[0]
-                mime = f"image/{mime}"
+    if favicon_b64 and "," in favicon_b64:
+        header, data = favicon_b64.split(",", 1)
+        # Extract MIME type via regex for safety
+        m = _MIME_RE.search(header)
+        mime = m.group(1) if m else "image/png"
+        try:
             raw = base64.b64decode(data)
-        else:
-            mime = "image/png"
-            raw = base64.b64decode(favicon_b64)
+        except Exception:
+            # Corrupted base64 — fall back to default
+            return Response(content=_DEFAULT_FAVICON_SVG, media_type="image/svg+xml",
+                            headers={"Cache-Control": "public, max-age=3600"})
         return Response(content=raw, media_type=mime,
                         headers={"Cache-Control": "public, max-age=3600"})
 

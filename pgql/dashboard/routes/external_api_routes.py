@@ -54,10 +54,6 @@ class QueryRequest(BaseModel):
     max_limit: int = 100
 
 
-class GraphQLRequest(BaseModel):
-    """Raw GraphQL query request."""
-    query: str
-    variables: Optional[dict] = None
 
 
 # --- Endpoints ---
@@ -116,14 +112,14 @@ async def query(req: QueryRequest, x_app_api_key: Optional[str] = Header(None)):
     """
     app = _resolve_app(x_app_api_key)
 
-    # Rate limiting
-    if not rate_limiter.is_allowed():
+    # Rate limiting (per-app isolation)
+    if not rate_limiter.is_allowed(client_id=app.get("app_id", "default")):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Validate prompt
     try:
         prompt = validate_message(req.prompt)
-    except (ValueError, Exception) as e:
+    except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid prompt: {str(e)}")
 
     # Get Hasura client

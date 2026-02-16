@@ -57,9 +57,9 @@ RUN useradd --create-home --shell /bin/bash appuser && \
 
 USER appuser
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "from pgql.config import ConfigManager; print('healthy')" || exit 1
+# Health check — verify HTTP server is actually responding
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:8765/api/health || exit 1
 
 # Expose dashboard port (if running in dashboard mode)
 EXPOSE 8765

@@ -44,6 +44,18 @@ const COLOR_LABELS = {
 
 // Current theme state
 let _currentTheme = null;
+// Cache to avoid duplicate API calls (initTheme + loadStyle)
+let _cachedThemeData = null;
+
+/**
+ * Sanitize a data URI for safe use in innerHTML.
+ * Prevents XSS by validating the data: prefix and escaping quotes.
+ */
+function safeDataUri(base64) {
+  if (!base64 || typeof base64 !== "string") return "";
+  if (!base64.startsWith("data:image/")) return "";
+  return base64.replace(/"/g, "&quot;");
+}
 
 /**
  * Apply theme colors + font to the live page via CSS variables.
@@ -74,14 +86,14 @@ function applyThemeToPage(theme) {
       document.head.appendChild(link);
     }
     root.style.setProperty("font-family", `"${theme.font}", system-ui, -apple-system, sans-serif`);
-    document.body.style.fontFamily = `"${theme.font}", system-ui, -apple-system, sans-serif`;
   }
 
   // Apply branding
   const logoIcon = document.querySelector(".logo-icon");
   const logoTitle = document.querySelector(".sidebar-logo h1");
-  if (theme.logo_base64 && logoIcon) {
-    logoIcon.innerHTML = `<img src="${theme.logo_base64}" alt="Logo" style="width:28px;height:28px;border-radius:6px;object-fit:cover">`;
+  const safeLogo = safeDataUri(theme.logo_base64);
+  if (safeLogo && logoIcon) {
+    logoIcon.innerHTML = `<img src="${safeLogo}" alt="Logo" style="width:28px;height:28px;border-radius:6px;object-fit:cover">`;
   } else if (theme.logo_text && logoIcon) {
     logoIcon.textContent = theme.logo_text;
   }
@@ -95,7 +107,9 @@ function applyThemeToPage(theme) {
  */
 export async function loadStyle() {
   try {
-    const data = await api("/config/theme");
+    // Use cached data if available (from initTheme), otherwise fetch
+    const data = _cachedThemeData || await api("/config/theme");
+    _cachedThemeData = null; // consume cache
     _currentTheme = data.theme;
     const defaults = data.defaults;
     const fonts = data.available_fonts || [];
@@ -142,8 +156,9 @@ export async function loadStyle() {
     // Render logo preview
     const logoPreview = document.getElementById("style-logo-preview");
     if (logoPreview) {
-      if (_currentTheme.logo_base64) {
-        logoPreview.innerHTML = `<img src="${_currentTheme.logo_base64}" alt="Logo" style="width:64px;height:64px;border-radius:10px;object-fit:cover;border:2px solid var(--border-color)">`;
+      const safeLogo = safeDataUri(_currentTheme.logo_base64);
+      if (safeLogo) {
+        logoPreview.innerHTML = `<img src="${safeLogo}" alt="Logo" style="width:64px;height:64px;border-radius:10px;object-fit:cover;border:2px solid var(--border-color)">`;
       } else {
         logoPreview.innerHTML = `<div style="width:64px;height:64px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px">${_currentTheme.logo_text || "PQ"}</div>`;
       }
@@ -152,8 +167,9 @@ export async function loadStyle() {
     // Render favicon preview
     const faviconPreview = document.getElementById("style-favicon-preview");
     if (faviconPreview) {
-      if (_currentTheme.favicon_base64) {
-        faviconPreview.innerHTML = `<img src="${_currentTheme.favicon_base64}" alt="Favicon" style="width:28px;height:28px;object-fit:contain">`;
+      const safeFav = safeDataUri(_currentTheme.favicon_base64);
+      if (safeFav) {
+        faviconPreview.innerHTML = `<img src="${safeFav}" alt="Favicon" style="width:28px;height:28px;object-fit:contain">`;
       } else {
         faviconPreview.innerHTML = `<svg viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="8" fill="var(--accent)"/><text x="16" y="22" font-family="system-ui" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">PQ</text></svg>`;
       }
@@ -200,7 +216,6 @@ export function previewFont() {
   }
   link.href = fontUrl;
   document.documentElement.style.setProperty("font-family", `"${font}", system-ui, sans-serif`);
-  document.body.style.fontFamily = `"${font}", system-ui, sans-serif`;
 }
 
 /**
@@ -238,7 +253,6 @@ export function uploadLogo() {
   };
   reader.readAsDataURL(file);
 }
-
 /**
  * Remove custom logo.
  */
@@ -303,7 +317,6 @@ export async function resetTheme() {
       root.style.removeProperty(cssVar);
     }
     root.style.removeProperty("font-family");
-    document.body.style.fontFamily = "";
     // Remove custom font link
     const fontLink = document.getElementById("theme-font-link");
     if (fontLink) fontLink.remove();
@@ -319,6 +332,7 @@ export async function resetTheme() {
 export async function initTheme() {
   try {
     const data = await api("/config/theme");
+    _cachedThemeData = data; // cache for loadStyle to reuse
     if (data.theme) applyThemeToPage(data.theme);
   } catch (e) {
     // Silently fail — use CSS defaults

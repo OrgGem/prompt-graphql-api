@@ -75,10 +75,10 @@ export async function sendChat() {
   }
 
   // Add user message
-  messagesDiv.innerHTML += `
+  messagesDiv.insertAdjacentHTML("beforeend", `
     <div style="align-self:flex-end;max-width:70%;padding:10px 14px;background:var(--accent);color:#fff;border-radius:var(--radius) var(--radius) 4px var(--radius);font-size:14px">
       ${escapeHtml(msg)}
-    </div>`;
+    </div>`);
 
   input.value = "";
   sendBtn.disabled = true;
@@ -87,10 +87,10 @@ export async function sendChat() {
 
   // Add loading indicator
   const loadingId = `loading-${Date.now()}`;
-  messagesDiv.innerHTML += `
+  messagesDiv.insertAdjacentHTML("beforeend", `
     <div id="${loadingId}" style="align-self:flex-start;max-width:70%;padding:10px 14px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:var(--radius) var(--radius) var(--radius) 4px;font-size:14px;color:var(--text-muted)">
       <span style="animation:pulse 1s infinite">Thinking...</span>
-    </div>`;
+    </div>`);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
   try {
@@ -144,23 +144,23 @@ export async function sendChat() {
         usageInfo = `<div style="font-size:11px;color:var(--text-muted);margin-top:6px">Model: ${escapeHtml(data.model || "")} · Tokens: ${data.usage.total_tokens}</div>`;
       }
 
-      messagesDiv.innerHTML += `
+      messagesDiv.insertAdjacentHTML("beforeend", `
         <div style="align-self:flex-start;max-width:80%;padding:10px 14px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:var(--radius) var(--radius) var(--radius) 4px;font-size:14px;color:var(--text-primary);white-space:pre-wrap;word-break:break-word">
           ${modeBadge}${escapeHtml(responseText)}${usageInfo}
-        </div>`;
+        </div>`);
     } else {
-      messagesDiv.innerHTML += `
+      messagesDiv.insertAdjacentHTML("beforeend", `
         <div style="align-self:flex-start;max-width:80%;padding:10px 14px;background:var(--error-bg);border:1px solid var(--error-border);border-radius:var(--radius) var(--radius) var(--radius) 4px;font-size:14px;color:var(--error)">
           ⚠️ ${escapeHtml(data.error || "Unknown error")}${data.details ? "\n" + escapeHtml(data.details) : ""}
-        </div>`;
+        </div>`);
     }
   } catch (e) {
     const loadingEl = document.getElementById(loadingId);
     if (loadingEl) loadingEl.remove();
-    messagesDiv.innerHTML += `
+    messagesDiv.insertAdjacentHTML("beforeend", `
       <div style="align-self:flex-start;max-width:80%;padding:10px 14px;background:var(--error-bg);border:1px solid var(--error-border);border-radius:var(--radius) var(--radius) var(--radius) 4px;font-size:14px;color:var(--error)">
         ⚠️ ${escapeHtml(e.message)}
-      </div>`;
+      </div>`);
   } finally {
     sendBtn.disabled = false;
     sendBtn.textContent = "Send ➤";

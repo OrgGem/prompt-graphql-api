@@ -18,6 +18,10 @@ import {
   createApp, editApp, closeEditModal, saveAppEdit,
   deleteApp, regenerateAppKey, toggleApp, copyAppKey,
 } from "./tabs/apps.js";
+import {
+  loadStyle, saveTheme, resetTheme, previewColor, previewFont,
+  uploadLogo, removeLogo, uploadFavicon, removeFavicon, initTheme,
+} from "./tabs/style.js";
 
 // --- State ---
 let currentTab = "overview";
@@ -69,8 +73,30 @@ window.regenerateAppKey = regenerateAppKey;
 window.toggleApp = toggleApp;
 window.copyAppKey = copyAppKey;
 
+// API Docs tab switcher
+window.showApiDoc = function(lang) {
+  document.querySelectorAll('.api-doc-content').forEach(d => d.style.display = 'none');
+  document.querySelectorAll('.api-doc-tab').forEach(b => b.classList.remove('active'));
+  const content = document.getElementById(`api-doc-${lang}`);
+  const btn = document.querySelector(`.api-doc-tab[data-lang="${lang}"]`);
+  if (content) content.style.display = 'block';
+  if (btn) btn.classList.add('active');
+};
+
+// Style tab
+window.loadStyle = loadStyle;
+window.saveTheme = saveTheme;
+window.resetTheme = resetTheme;
+window.previewColor = previewColor;
+window.previewFont = previewFont;
+window.uploadLogo = uploadLogo;
+window.removeLogo = removeLogo;
+window.uploadFavicon = uploadFavicon;
+window.removeFavicon = removeFavicon;
+
 // --- Init ---
 document.addEventListener("DOMContentLoaded", () => {
+  initTheme();  // Apply saved theme before anything renders
   initNavigation();
   loadOverview();
   startAutoRefresh();
@@ -105,6 +131,7 @@ function switchTab(tab) {
     rules: loadRules,
     apps: () => { loadApps(); loadSchemaCache(); },
     chat: () => { loadChat(); loadLLMConfig(); },
+    style: loadStyle,
   };
   if (loaders[tab]) loaders[tab]();
 }

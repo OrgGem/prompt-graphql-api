@@ -10,6 +10,12 @@ from pgql.utils.cache import metadata_cache
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
+# Well-known LLM provider identifiers
+KNOWN_LLM_PROVIDERS = {
+    "openai", "anthropic", "google", "groq",
+    "mistral", "together", "ollama", "lmstudio",
+}
+
 
 # --- Request/Response Models ---
 
@@ -44,7 +50,7 @@ async def get_config():
     # Check which required fields are missing
     missing = []
     if not api_key:
-        missing.append({"key": "api_key", "label": "API Key", "env": "PROMPTQL_API_KEY", "hint": "Authentication key for external apps. Click Generate to create one.", "required": True})
+        missing.append({"key": "api_key", "label": "PromptQL Service Key", "env": "PROMPTQL_API_KEY", "hint": "Service auth key for PromptQL Cloud — NOT for external apps. Click Generate to create one.", "required": True})
     if not base_url:
         missing.append({"key": "base_url", "label": "PGQL Base URL", "env": "PGQL_BASE_URL", "hint": "Server base URL (default: http://localhost:8765)", "required": True})
     if not auth_token:
@@ -138,18 +144,11 @@ async def list_api_keys():
     provider_details = {}
 
     # Well-known LLM provider keys
-    known_providers = {
-        "openai": "openai_api_key",
-        "anthropic": "anthropic_api_key",
-        "google": "google_api_key",
-        "groq": "groq_api_key",
-        "mistral": "mistral_api_key",
-        "together": "together_api_key",
-        "ollama": "ollama_api_key",
-        "lmstudio": "lmstudio_api_key",
+    known_config_keys = {
+        p: f"{p}_api_key" for p in KNOWN_LLM_PROVIDERS
     }
 
-    for provider, config_key in known_providers.items():
+    for provider, config_key in known_config_keys.items():
         val = config.get(config_key)
         if val:
             keys[provider] = _mask(val)
@@ -195,10 +194,7 @@ async def add_api_key(req: APIKeyRequest):
             detail="PromptQL API key is a service auth key. Set it via Server Configuration, not LLM Provider Keys."
         )
 
-    known_providers = {
-        "openai", "anthropic", "google", "groq",
-        "mistral", "together", "ollama", "lmstudio",
-    }
+    known_providers = KNOWN_LLM_PROVIDERS
 
     is_known = provider in known_providers
     is_custom = provider.startswith("custom:") or not is_known
@@ -248,10 +244,7 @@ async def activate_provider(provider: str):
     """Set a provider's config as the active LLM configuration for chat."""
     provider = provider.lower().strip()
 
-    known_providers = {
-        "openai", "anthropic", "google", "groq",
-        "mistral", "together", "ollama", "lmstudio",
-    }
+    known_providers = KNOWN_LLM_PROVIDERS
 
     is_known = provider in known_providers
 
@@ -283,6 +276,8 @@ async def activate_provider(provider: str):
         config.config["llm_temperature"] = temperature
     if max_tokens:
         config.config["llm_max_tokens"] = max_tokens
+    # Also set as active llm_provider_id
+    config.set("llm_provider_id", provider)
     config.save_config()
 
     return {"success": True, "message": f"{provider} activated as LLM", "model": model or "default"}
@@ -299,10 +294,7 @@ async def delete_api_key(provider: str):
             detail="PromptQL API key is managed via Server Configuration."
         )
 
-    known_providers = {
-        "openai", "anthropic", "google", "groq",
-        "mistral", "together", "ollama", "lmstudio",
-    }
+    known_providers = KNOWN_LLM_PROVIDERS
 
     is_known = provider in known_providers
 

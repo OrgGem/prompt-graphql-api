@@ -8,6 +8,7 @@
       name="description"
       content="Admin dashboard for monitoring and configuring PromptQL MCP Server"
     />
+    <link rel="icon" id="favicon-link" href="/api/config/theme/favicon" />
     <link rel="stylesheet" href="/static/css/variables.css" />
     <link rel="stylesheet" href="/static/css/layout.css" />
     <link rel="stylesheet" href="/static/css/components.css" />
@@ -50,6 +51,10 @@
           <div class="nav-item" data-tab="chat">
             <span class="icon">💬</span>
             <span>Chat</span>
+          </div>
+          <div class="nav-item" data-tab="style">
+            <span class="icon">🎨</span>
+            <span>Style</span>
           </div>
         </nav>
 
@@ -472,6 +477,87 @@
               </div>
             </div>
           </div>
+
+          <!-- API Documentation -->
+          <div class="section" style="margin-top:20px">
+            <div class="section-header">
+              <h3>📚 External API Documentation</h3>
+              <a href="/api/docs" target="_blank" class="btn btn-outline btn-sm">🔗 Swagger UI</a>
+            </div>
+            <div class="section-body">
+              <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+                External apps use the <code>X-App-Api-Key</code> header to authenticate. Each app sees only its allowed tables and respects its role (read/write).
+              </p>
+
+              <div style="margin-bottom:16px">
+                <div style="display:flex;gap:8px;margin-bottom:12px">
+                  <button class="btn btn-outline btn-sm api-doc-tab active" onclick="showApiDoc('curl')" data-lang="curl">cURL</button>
+                  <button class="btn btn-outline btn-sm api-doc-tab" onclick="showApiDoc('python')" data-lang="python">Python</button>
+                  <button class="btn btn-outline btn-sm api-doc-tab" onclick="showApiDoc('node')" data-lang="node">Node.js</button>
+                </div>
+
+                <!-- cURL examples -->
+                <div id="api-doc-curl" class="api-doc-content" style="display:block">
+                  <div style="background:var(--bg-input);border-radius:var(--radius-sm);padding:16px;font-family:monospace;font-size:12px;line-height:1.8;overflow-x:auto;white-space:pre;color:var(--text-primary)"><span style="color:var(--text-muted)"># Check your app identity</span>
+curl <span id="api-base-url-curl-me">http://localhost:8765</span>/api/v1/me \
+  -H "X-App-Api-Key: <span style="color:var(--accent)">YOUR_API_KEY</span>"
+
+<span style="color:var(--text-muted)"># List available tables</span>
+curl <span id="api-base-url-curl-schema">http://localhost:8765</span>/api/v1/schema \
+  -H "X-App-Api-Key: <span style="color:var(--accent)">YOUR_API_KEY</span>"
+
+<span style="color:var(--text-muted)"># Query with natural language</span>
+curl -X POST <span id="api-base-url-curl-query">http://localhost:8765</span>/api/v1/query \
+  -H "X-App-Api-Key: <span style="color:var(--accent)">YOUR_API_KEY</span>" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Show me the latest 10 users"}'</div>
+                </div>
+
+                <!-- Python examples -->
+                <div id="api-doc-python" class="api-doc-content" style="display:none">
+                  <div style="background:var(--bg-input);border-radius:var(--radius-sm);padding:16px;font-family:monospace;font-size:12px;line-height:1.8;overflow-x:auto;white-space:pre;color:var(--text-primary)"><span style="color:var(--text-muted)"># pip install requests</span>
+import requests
+
+BASE = "<span id="api-base-url-python">http://localhost:8765</span>/api/v1"
+HEADERS = {"X-App-Api-Key": "<span style="color:var(--accent)">YOUR_API_KEY</span>"}
+
+<span style="color:var(--text-muted)"># Check identity</span>
+me = requests.get(f"{BASE}/me", headers=HEADERS).json()
+print(me["role"], me["allowed_tables"])
+
+<span style="color:var(--text-muted)"># Natural language query</span>
+result = requests.post(f"{BASE}/query", headers=HEADERS,
+    json={"prompt": "Show me the latest 10 users"}).json()
+print(result["answer"])</div>
+                </div>
+
+                <!-- Node.js examples -->
+                <div id="api-doc-node" class="api-doc-content" style="display:none">
+                  <div style="background:var(--bg-input);border-radius:var(--radius-sm);padding:16px;font-family:monospace;font-size:12px;line-height:1.8;overflow-x:auto;white-space:pre;color:var(--text-primary)"><span style="color:var(--text-muted)">// Node.js 18+ with fetch</span>
+const BASE = "<span id="api-base-url-node">http://localhost:8765</span>/api/v1";
+const HEADERS = { "X-App-Api-Key": "<span style="color:var(--accent)">YOUR_API_KEY</span>" };
+
+<span style="color:var(--text-muted)">// Check identity</span>
+const me = await fetch(`${BASE}/me`, { headers: HEADERS }).then(r => r.json());
+console.log(me.role, me.allowed_tables);
+
+<span style="color:var(--text-muted)">// Natural language query</span>
+const result = await fetch(`${BASE}/query`, {
+  method: "POST",
+  headers: { ...HEADERS, "Content-Type": "application/json" },
+  body: JSON.stringify({ prompt: "Show me the latest 10 users" })
+}).then(r => r.json());
+console.log(result.answer);</div>
+                </div>
+              </div>
+
+              <div style="font-size:12px;color:var(--text-muted)">
+                <strong>Endpoints:</strong>
+                <code>GET /api/v1/me</code> · <code>GET /api/v1/schema</code> · <code>POST /api/v1/query</code>
+                — Full docs at <a href="/api/docs#/External%20API%20v1" target="_blank" style="color:var(--accent)">/api/docs</a>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ===== Chat Tab ===== -->
@@ -528,6 +614,99 @@
                          style="flex:1;padding:10px 14px;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:14px;font-family:Inter,sans-serif;background:var(--bg-card);color:var(--text-primary)"
                          onkeydown="if(event.key==='Enter')sendChat()" />
                   <button id="chat-send-btn" class="btn btn-primary" onclick="sendChat()">Send ➤</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Style Tab ===== -->
+        <div id="tab-style" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2>Style Editor</h2>
+              <p class="subtitle">Customize colors, fonts, and branding</p>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" onclick="resetTheme()">↩️ Reset Defaults</button>
+              <button class="btn btn-primary" onclick="saveTheme()">💾 Save Theme</button>
+            </div>
+          </div>
+
+          <!-- Color Palette -->
+          <div class="section">
+            <div class="section-header"><h3>🎨 Color Palette</h3></div>
+            <div class="section-body">
+              <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+                Click any color to change it. Changes preview instantly.
+              </p>
+              <div id="style-colors-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
+                <div style="color:var(--text-muted);padding:20px;text-align:center">Loading colors...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Typography -->
+          <div class="section" style="margin-top:20px">
+            <div class="section-header"><h3>🔤 Typography</h3></div>
+            <div class="section-body">
+              <div class="form-group" style="max-width:300px">
+                <label>Font Family</label>
+                <select id="style-font-select" onchange="previewFont()"
+                  style="padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:14px;background:var(--bg-card);color:var(--text-primary);width:100%">
+                  <option>Loading...</option>
+                </select>
+              </div>
+              <div style="margin-top:12px;padding:16px;background:var(--bg-input);border-radius:var(--radius-sm)">
+                <p style="font-size:24px;font-weight:700;margin-bottom:4px">The quick brown fox</p>
+                <p style="font-size:16px;font-weight:400;color:var(--text-secondary)">jumps over the lazy dog — 0123456789</p>
+                <p style="font-size:13px;font-weight:300;color:var(--text-muted)">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Branding -->
+          <div class="section" style="margin-top:20px">
+            <div class="section-header"><h3>✨ Branding</h3></div>
+            <div class="section-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div>
+                  <div class="form-group">
+                    <label>Application Name</label>
+                    <input id="style-app-name" type="text" placeholder="PromptQL" maxlength="30"
+                      oninput="document.querySelector('.sidebar-logo h1').textContent = this.value || 'PromptQL'">
+                  </div>
+                  <div class="form-group" style="margin-top:12px">
+                    <label>Logo Text (1-4 chars)</label>
+                    <input id="style-logo-text" type="text" placeholder="PQ" maxlength="4"
+                      oninput="document.querySelector('.logo-icon').textContent = this.value || 'PQ'">
+                  </div>
+                </div>
+                <div>
+                  <label style="display:block;margin-bottom:8px;font-size:13px;font-weight:500;color:var(--text-secondary)">Logo Icon</label>
+                  <div style="display:flex;align-items:center;gap:16px">
+                    <div id="style-logo-preview"></div>
+                    <div>
+                      <input type="file" id="style-logo-upload" accept="image/*" style="display:none" onchange="uploadLogo()">
+                      <button class="btn btn-outline btn-sm" onclick="document.getElementById('style-logo-upload').click()">📁 Upload Image</button>
+                      <button class="btn btn-outline btn-sm" onclick="removeLogo()" style="margin-top:6px">🗑 Remove</button>
+                      <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Max 200KB · PNG, JPG, SVG</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Favicon -->
+              <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-color)">
+                <label style="display:block;margin-bottom:8px;font-size:13px;font-weight:500;color:var(--text-secondary)">🌐 Favicon (Browser Tab Icon)</label>
+                <div style="display:flex;align-items:center;gap:16px">
+                  <div id="style-favicon-preview" style="width:32px;height:32px;border-radius:6px;border:2px solid var(--border-color);overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-input)"></div>
+                  <div>
+                    <input type="file" id="style-favicon-upload" accept="image/*" style="display:none" onchange="uploadFavicon()">
+                    <button class="btn btn-outline btn-sm" onclick="document.getElementById('style-favicon-upload').click()">📁 Upload Favicon</button>
+                    <button class="btn btn-outline btn-sm" onclick="removeFavicon()" style="margin-left:6px">🗑 Remove</button>
+                    <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Max 200KB · 32×32 recommended · PNG, ICO, SVG</p>
+                  </div>
                 </div>
               </div>
             </div>

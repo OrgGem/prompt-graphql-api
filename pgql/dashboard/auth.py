@@ -40,9 +40,12 @@ async def verify_api_key(request: Request, api_key: str | None = Depends(api_key
     path = request.url.path
 
     # Allow static assets, docs, and health check without auth
-    if path in ("/", "/api/docs", "/api/redoc", "/api/openapi.json", "/api/health"):
+    if path in ("/", "/api/docs", "/api/redoc", "/api/openapi.json", "/api/health", "/api/config/theme/favicon"):
         return
     if path.startswith("/static/"):
+        return
+    # External API v1 uses its own auth (X-App-Api-Key), not dashboard key
+    if path.startswith("/api/v1/"):
         return
 
     # API endpoints require auth

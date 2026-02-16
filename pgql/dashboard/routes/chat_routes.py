@@ -56,6 +56,8 @@ def _resolve_mode(mode: str) -> str:
     if mode == "promptql":
         return "promptql"
     # auto: prefer LLM if configured, else PromptQL
+    if config.get("llm_provider_id"):
+        return "llm"
     if config.get("llm_api_key") and config.get("llm_base_url"):
         return "llm"
     if config.is_configured():
@@ -129,8 +131,8 @@ async def _chat_promptql(req: ChatRequest) -> dict:
                 "mode": "promptql",
                 "error": f"App '{req.app_id}' is disabled"
             }
-        # Get unmasked API key
-        app_full = app_manager._data.get("apps", {}).get(req.app_id)
+        # Get app with unmasked API key via public method
+        app_full = app_manager.get_app_with_key(req.app_id)
         if not app_full:
             return {
                 "success": False,

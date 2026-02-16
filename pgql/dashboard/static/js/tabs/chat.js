@@ -40,8 +40,8 @@ export async function loadChatApps() {
       }
     }
 
-    // Update badge on change
-    selector.addEventListener("change", () => {
+    // Update badge on change (use onchange to prevent listener stacking)
+    selector.onchange = () => {
       const badge = document.getElementById("chat-app-badge");
       if (selector.value) {
         const app = apps.find(a => a.app_id === selector.value);
@@ -55,7 +55,7 @@ export async function loadChatApps() {
         badge.textContent = "";
         badge.style.background = "var(--bg-input)";
       }
-    });
+    };
   } catch (e) {
     console.error("Failed to load apps for chat:", e);
   }

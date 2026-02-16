@@ -3,15 +3,17 @@
 
 import json
 import secrets
-import string
 import os
-import fcntl
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 import logging
 from cryptography.fernet import Fernet
-import base64
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # Windows/macOS fallback — no file locking
 
 logger = logging.getLogger(__name__)
 
@@ -51,17 +53,14 @@ class AppManager:
         """Encrypt API key if cipher is available."""
         if not self._cipher:
             return api_key
-        encrypted = self._cipher.encrypt(api_key.encode())
-        return base64.urlsafe_b64encode(encrypted).decode()
+        return self._cipher.encrypt(api_key.encode()).decode()
 
     def _decrypt_key(self, encrypted_key: str) -> str:
         """Decrypt API key if cipher is available."""
         if not self._cipher:
             return encrypted_key
         try:
-            encrypted_bytes = base64.urlsafe_b64decode(encrypted_key.encode())
-            decrypted = self._cipher.decrypt(encrypted_bytes)
-            return decrypted.decode()
+            return self._cipher.decrypt(encrypted_key.encode()).decode()
         except Exception as e:
             logger.error(f"Failed to decrypt key: {e}")
             return encrypted_key  # Fallback to plain text
@@ -72,9 +71,11 @@ class AppManager:
         if self.apps_file.exists():
             try:
                 with open(self.apps_file, "r") as f:
-                    fcntl.flock(f, fcntl.LOCK_SH)  # Shared lock for reading
+                    if fcntl:
+                        fcntl.flock(f, fcntl.LOCK_SH)
                     data = json.load(f)
-                    fcntl.flock(f, fcntl.LOCK_UN)
+                    if fcntl:
+                        fcntl.flock(f, fcntl.LOCK_UN)
 
                 # Decrypt API keys on load
                 for app in data.get("apps", {}).values():
@@ -106,9 +107,11 @@ class AppManager:
 
             # Atomic write with exclusive lock
             with open(self.apps_file, "w") as f:
-                fcntl.flock(f, fcntl.LOCK_EX)  # Exclusive lock for writing
+                if fcntl:
+                    fcntl.flock(f, fcntl.LOCK_EX)
                 json.dump(data_to_save, f, indent=2)
-                fcntl.flock(f, fcntl.LOCK_UN)
+                if fcntl:
+                    fcntl.flock(f, fcntl.LOCK_UN)
 
             logger.info(f"Saved {len(self._data.get('apps', {}))} apps to {self.apps_file}")
         except Exception as e:
@@ -130,6 +133,11 @@ class AppManager:
         if app:
             return {**app, "api_key": self._mask_key(app.get("api_key", ""))}
         return None
+
+    def get_app_with_key(self, app_id: str) -> Optional[dict]:
+        """Get app with UNMASKED API key (for internal auth use only)."""
+        app = self._data.get("apps", {}).get(app_id)
+        return app.copy() if app else None
 
     def create_app(
         self,
@@ -153,8 +161,9 @@ class AppManager:
         
         # Validate allowed_tables against cached schema
         if allowed_tables:
-            allowed_tables = [t.strip() for t in allowed_tables if t.strip()]  # Remove empty strings
-            schema_tables = self.get_cached_schema()
+            allowed_tables = [t.strip() for t in allowed_tables if t.strip()]
+            cached = self.get_cached_tables()
+            schema_tables = cached.get("tables", [])
             if schema_tables:
                 invalid_tables = [t for t in allowed_tables if t not in schema_tables]
                 if invalid_tables:
@@ -194,7 +203,8 @@ class AppManager:
             allowed_tables = updates["allowed_tables"]
             if allowed_tables:
                 allowed_tables = [t.strip() for t in allowed_tables if t.strip()]
-                schema_tables = self.get_cached_schema()
+                cached = self.get_cached_tables()
+                schema_tables = cached.get("tables", [])
                 if schema_tables:
                     invalid_tables = [t for t in allowed_tables if t not in schema_tables]
                     if invalid_tables:
@@ -267,9 +277,7 @@ class AppManager:
 
     def _generate_key(self) -> str:
         """Generate a cryptographically secure API key."""
-        chars = string.ascii_letters + string.digits + "_-"
-        key = "".join(secrets.choice(chars) for _ in range(API_KEY_LENGTH))
-        return f"{API_KEY_PREFIX}{key}"
+        return f"{API_KEY_PREFIX}{secrets.token_urlsafe(API_KEY_LENGTH)}"
 
     @staticmethod
     def _mask_key(key: str) -> str:

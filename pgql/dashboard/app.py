@@ -41,13 +41,15 @@ static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Register API routes
-from pgql.dashboard.routes import health_routes, metrics_routes, config_routes, chat_routes, app_routes
+from pgql.dashboard.routes import health_routes, metrics_routes, config_routes, chat_routes, app_routes, external_api_routes, theme_routes
 
 app.include_router(health_routes.router, prefix="/api", tags=["Health"])
 app.include_router(metrics_routes.router, prefix="/api", tags=["Metrics"])
 app.include_router(config_routes.router, prefix="/api", tags=["Configuration"])
 app.include_router(chat_routes.router, prefix="/api", tags=["Chat"])
 app.include_router(app_routes.router, prefix="/api", tags=["Apps"])
+app.include_router(external_api_routes.router, prefix="/api", tags=["External API v1"])
+app.include_router(theme_routes.router, prefix="/api", tags=["Theme"])
 
 logger.info("Dashboard app created successfully")
 

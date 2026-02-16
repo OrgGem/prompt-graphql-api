@@ -26,3 +26,6 @@ ENV/
 
 # Config files with potentially sensitive information
 .env
+.agent/
+.github/
+.pytest_cache/

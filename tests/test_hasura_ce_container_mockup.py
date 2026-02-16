@@ -1,11 +1,11 @@
-import os
+﻿import os
 import time
 import unittest
 
 import requests
 
-from promptql_mcp_server.api.hasura_ce_client import HasuraCEClient
-from promptql_mcp_server.api.hasura_query_planner import plan_prompt_to_graphql, synthesize_answer
+from pgql.api.hasura_ce_client import HasuraCEClient
+from pgql.api.hasura_query_planner import plan_prompt_to_graphql, synthesize_answer
 
 
 class HasuraCEMockupContainerTests(unittest.TestCase):

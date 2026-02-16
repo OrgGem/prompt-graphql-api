@@ -1,14 +1,91 @@
-.git
-.gitignore
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 venv/
 ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+.tox/
+htmlcov/
+*.cover
+.hypothesis/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Documentation
+*.md
+docs/
+
+# Environment files
 .env
+.env.*
+!.env.docker.example
+
+# Agent tools (build-time not needed)
+.agent/
+
+# Logs and temporary files
+*.log
+*.pid
+*.seed
+*.pid.lock
+tmp/
+temp/
+
+# Docker
+.dockerignore
+docker-compose.yml
+Dockerfile
+*.dockerfile
+
+# Test data
 tests/
+test_*.py
+*_test.py
+
+# Examples and demos
 examples/
+demo_*.sh
+
+# Code review artifacts
+code_review_report.*

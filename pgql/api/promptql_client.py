@@ -1,4 +1,4 @@
-# promptql_mcp_server/api/promptql_client.py
+# pgql/api/promptql_client.py
 
 import requests
 import json
@@ -19,18 +19,18 @@ logger = logging.getLogger("promptql_client")
 class PromptQLClient:
     """Client for interacting with the PromptQL Async Threads API."""
 
-    def __init__(self, api_key: str, playground_url: str, auth_token: str, auth_mode: str = "public", timezone: str = "America/Los_Angeles"):
+    def __init__(self, api_key: str, base_url: str, auth_token: str, auth_mode: str = "public", timezone: str = "America/Los_Angeles"):
         """Initialize the PromptQL API client.
 
         Args:
             api_key: PromptQL API key
-            playground_url: PromptQL playground URL
+            base_url: PromptQL PGQL Base URL
             auth_token: DDN Auth Token
             auth_mode: Authentication mode - "public" for Auth-Token or "private" for x-hasura-ddn-token
             timezone: Timezone for requests
         """
         self.api_key = api_key
-        self.playground_url = playground_url.rstrip('/')  # Remove trailing slash if present
+        self.base_url = base_url.rstrip('/')  # Remove trailing slash if present
         self.auth_token = auth_token
         self.auth_mode = auth_mode.lower()
         self.timezone = timezone
@@ -45,8 +45,11 @@ class PromptQLClient:
         """Get DDN headers based on the authentication mode.
 
         Returns:
-            Dictionary with appropriate authentication header
+            Dictionary with appropriate authentication header.
+            Returns empty dict if no auth_token is configured (Hasura CE mode).
         """
+        if not self.auth_token:
+            return {}
         if self.auth_mode == "public":
             return {"Auth-Token": self.auth_token}
         elif self.auth_mode == "private":
@@ -109,7 +112,7 @@ class PromptQLClient:
         try:
             # Use streaming request with proper SSE headers
             response = requests.get(
-                f"{self.playground_url}/threads/v2/{thread_id}",
+                f"{self.base_url}/threads/v2/{thread_id}",
                 headers={
                     "Authorization": f"api-key {self.api_key}",
                     "Accept": "text/event-stream",
@@ -152,7 +155,7 @@ class PromptQLClient:
 
         try:
             response = requests.post(
-                f"{self.playground_url}/threads/v2/{thread_id}/cancel",
+                f"{self.base_url}/threads/v2/{thread_id}/cancel",
                 headers={"Authorization": f"api-key {self.api_key}"},
                 timeout=30
             )
@@ -185,7 +188,7 @@ class PromptQLClient:
 
         try:
             response = requests.get(
-                f"{self.playground_url}/threads/v2/{thread_id}/artifacts/{artifact_id}/data",
+                f"{self.base_url}/threads/v2/{thread_id}/artifacts/{artifact_id}/data",
                 headers={"Authorization": f"api-key {self.api_key}"},
                 timeout=30
             )
@@ -253,7 +256,7 @@ class PromptQLClient:
 
         try:
             response = requests.post(
-                f"{self.playground_url}/threads/v2/start",
+                f"{self.base_url}/threads/v2/start",
                 headers=headers,
                 json=request_body,
                 timeout=30
@@ -310,78 +313,45 @@ class PromptQLClient:
         return {"error": f"Thread processing timeout after {max_wait_time} seconds"}
 
     def _parse_sse_stream(self, response) -> Dict:
-        """Parse Server-Sent Events stream and extract thread state."""
-        logger.info("Parsing SSE stream for thread status")
+        """Parse Server-Sent Events stream and extract thread state.
+        
+        Uses the shared SSE parser utility for low-level parsing,
+        while handling domain-specific event types here.
+        """
+        from pgql.utils.sse_parser import parse_sse_stream
 
+        logger.info("Parsing SSE stream for thread status")
         thread_state = None
-        current_event_type = None
 
         try:
-            # Process the SSE stream line by line
-            for line in response.iter_lines(decode_unicode=True):
-                if line is None:
-                    continue
+            for event in parse_sse_stream(response):
+                event_type = event.get("event")
 
-                # Handle SSE event type
-                if line.startswith('event: '):
-                    current_event_type = line[7:]  # Remove 'event: ' prefix
-                    logger.debug(f"SSE Event Type: {current_event_type}")
+                if event_type == "current-thread-state":
+                    logger.info("Received current-thread-state event")
+                    if "thread_state" in event:
+                        new_state = event["thread_state"]
+                        if new_state:
+                            enhanced_state = new_state.copy()
+                            enhanced_state["thread_id"] = event.get("thread_id")
+                            enhanced_state["title"] = event.get("title")
+                            enhanced_state["version"] = event.get("version")
+                            thread_state = enhanced_state
+                            logger.debug(f"Updated thread state with {len(new_state.get('interactions', []))} interactions")
 
-                # Handle SSE data
-                elif line.startswith('data: '):
-                    data_content = line[6:]  # Remove 'data: ' prefix
-
-                    try:
-                        event_data = json.loads(data_content)
-
-                        # Handle current-thread-state event (main thread data)
-                        if current_event_type == "current-thread-state":
-                            logger.info("Received current-thread-state event")
-
-                            # Extract thread_state from the nested structure
-                            if "thread_state" in event_data:
-                                new_state = event_data["thread_state"]
-                                if new_state:
-                                    # Also include top-level metadata
-                                    enhanced_state = new_state.copy()
-                                    enhanced_state["thread_id"] = event_data.get("thread_id")
-                                    enhanced_state["title"] = event_data.get("title")
-                                    enhanced_state["version"] = event_data.get("version")
-
-                                    # Use the most recent current-thread-state
-                                    thread_state = enhanced_state
-                                    logger.debug(f"Updated thread state with {len(new_state.get('interactions', []))} interactions")
-
-                        # Handle interaction-update events (real-time updates)
-                        elif current_event_type == "interaction-update":
-                            logger.debug(f"Received interaction-update event: {event_data.get('event', {}).get('type', 'unknown')}")
-                            # For now, we'll rely on current-thread-state for the main data
-                            # interaction-update events could be used for real-time progress tracking
-
-                        else:
-                            logger.debug(f"Received other event type: {current_event_type}")
-
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"Failed to parse SSE data as JSON: {data_content[:100]}...")
-                        continue
-
-                elif line == '':
-                    # Empty line indicates end of event, reset event type
-                    current_event_type = None
-                    continue
+                elif event_type == "interaction-update":
+                    logger.debug(f"Received interaction-update event: {event.get('event', {}).get('type', 'unknown')}")
 
                 else:
-                    # Handle other SSE fields (id:, retry:, etc.)
-                    logger.debug(f"SSE Field: {line}")
+                    logger.debug(f"Received other event type: {event_type}")
 
         except Exception as e:
             logger.error(f"Error parsing SSE stream: {str(e)}")
             return {}
         finally:
-            # Ensure the response is properly closed
             try:
                 response.close()
-            except:
+            except Exception:
                 pass
 
         return thread_state or {}
@@ -456,7 +426,7 @@ class PromptQLClient:
 
         try:
             response = requests.post(
-                f"{self.playground_url}/threads/v2/{thread_id}/continue",
+                f"{self.base_url}/threads/v2/{thread_id}/continue",
                 headers=headers,
                 json=request_body,
                 timeout=30

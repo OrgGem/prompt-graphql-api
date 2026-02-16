@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PromptQL Admin Dashboard</title>
+    <meta
+      name="description"
+      content="Admin dashboard for monitoring and configuring PromptQL MCP Server"
+    />
+    <link rel="stylesheet" href="/static/css/variables.css" />
+    <link rel="stylesheet" href="/static/css/layout.css" />
+    <link rel="stylesheet" href="/static/css/components.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-logo">
+          <div class="logo-icon">PQ</div>
+          <h1>PromptQL</h1>
+          <span class="version">v0.1</span>
+        </div>
+
+        <nav>
+          <div class="nav-item active" data-tab="overview">
+            <span class="icon">📊</span>
+            <span>Overview</span>
+          </div>
+          <div class="nav-item" data-tab="config">
+            <span class="icon">⚙️</span>
+            <span>Configuration</span>
+          </div>
+          <div class="nav-item" data-tab="keys">
+            <span class="icon">🤖</span>
+            <span>LLM Providers</span>
+          </div>
+          <div class="nav-item" data-tab="monitoring">
+            <span class="icon">📡</span>
+            <span>Monitoring</span>
+          </div>
+          <div class="nav-item" data-tab="rules">
+            <span class="icon">🛡️</span>
+            <span>Rules &amp; Cache</span>
+          </div>
+          <div class="nav-item" data-tab="apps">
+            <span class="icon">📱</span>
+            <span>Apps</span>
+          </div>
+          <div class="nav-item" data-tab="chat">
+            <span class="icon">💬</span>
+            <span>Chat</span>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="status-badge">
+            <span class="status-dot"></span>
+            <span>Server Online</span>
+            <span
+              id="config-status-badge"
+              class="badge info"
+              style="margin-left: auto"
+              >Loading</span
+            >
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main">
+        <!-- ===== Overview Tab ===== -->
+        <div id="tab-overview" class="tab-content active">
+          <div class="page-header">
+            <div>
+              <h2>Dashboard Overview</h2>
+              <p class="subtitle">Real-time PromptQL MCP Server metrics</p>
+            </div>
+            <button class="refresh-btn" onclick="refreshData()">
+              ↻ Refresh
+            </button>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="label">Total Requests</div>
+              <div class="value" id="stat-requests">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Success Rate</div>
+              <div class="value" id="stat-success-rate">100%</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Avg Response</div>
+              <div class="value" id="stat-avg-time">0ms</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Uptime</div>
+              <div class="value" id="stat-uptime">0m</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Cache Hit Rate</div>
+              <div class="value" id="stat-cache-hit">N/A</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Errors</div>
+              <div class="value" id="stat-errors">0</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <h3>Tool Breakdown</h3>
+            </div>
+            <div class="section-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Tool</th>
+                      <th>Requests</th>
+                      <th>Errors</th>
+                      <th>Avg Duration</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tools-breakdown"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Configuration Tab ===== -->
+        <div id="tab-config" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2>Configuration</h2>
+              <p class="subtitle">Manage server settings and environment</p>
+            </div>
+            <button class="refresh-btn" onclick="loadConfig()">
+              ↻ Refresh
+            </button>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <h3>Server Configuration</h3>
+            </div>
+            <div class="section-body" id="config-fields">
+              <p style="color: var(--text-muted)">Loading...</p>
+            </div>
+          </div>
+
+          <div class="section" style="margin-top:20px">
+            <div class="section-header">
+              <h3>LLM Configuration</h3>
+              <span id="llm-status-badge" class="badge info" style="font-size:11px">Loading</span>
+            </div>
+            <div class="section-body">
+              <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+                Select an LLM provider from <a href="#" onclick="switchTab('keys');return false" style="color:var(--accent)">LLM Providers</a> tab to use for chat.
+              </p>
+              <div id="llm-config-fields">
+                <div class="form-group">
+                  <label>Select LLM Provider</label>
+                  <select id="llm-provider-selector" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:14px;background:var(--bg-card);color:var(--text-primary)" onchange="onLLMProviderChange()">
+                    <option value="">— No LLM (PromptQL only) —</option>
+                  </select>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
+                    Create/manage providers in <strong>LLM Providers</strong> tab, then select one here.
+                  </div>
+                </div>
+                <div id="llm-provider-details" style="display:none;margin-top:12px;padding:12px;background:var(--bg-input);border-radius:var(--radius-sm);font-size:13px">
+                  <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;color:var(--text-muted)">
+                    <div><strong>Provider:</strong></div><div id="llm-detail-provider"></div>
+                    <div><strong>Base URL:</strong></div><div id="llm-detail-base-url"></div>
+                    <div><strong>Model:</strong></div><div id="llm-detail-model"></div>
+                  </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveLLMConfig()" style="margin-top:16px">💾 Use Selected Provider</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== API Keys Tab ===== -->
+        <div id="tab-keys" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2>LLM Provider Keys</h2>
+              <p class="subtitle">
+                Manage API keys for OpenAI, Anthropic, and custom LLM providers
+              </p>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <h3>Add New Provider</h3>
+            </div>
+            <div class="section-body">
+              <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+                <div class="form-group" style="flex:1;min-width:150px">
+                  <label>Provider</label>
+                  <select id="new-key-provider" onchange="onProviderChange()">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="google">Google AI (Gemini)</option>
+                    <option value="groq">Groq</option>
+                    <option value="mistral">Mistral AI</option>
+                    <option value="together">Together AI</option>
+                    <option value="ollama">Ollama (Local)</option>
+                    <option value="lmstudio">LM Studio (Local)</option>
+                    <option value="custom">Custom Provider...</option>
+                  </select>
+                </div>
+                <div class="form-group" style="flex:2;min-width:250px">
+                  <label>API Key</label>
+                  <input id="new-key-value" type="password" placeholder="sk-..." />
+                </div>
+              </div>
+
+              <!-- Custom / Extended fields (hidden by default) -->
+              <div id="custom-provider-fields" style="display:none;margin-top:12px;padding:16px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:var(--radius-sm)">
+                <div style="font-weight:600;font-size:13px;color:var(--text-secondary);margin-bottom:12px">🔧 OpenAI-Compatible Connection Settings</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                  <div class="form-group" style="flex:1;min-width:150px" id="custom-name-group">
+                    <label>Provider Name</label>
+                    <input id="new-key-custom-name" type="text" placeholder="my-provider" />
+                  </div>
+                  <div class="form-group" style="flex:2;min-width:250px">
+                    <label>Base URL</label>
+                    <input id="new-key-base-url" type="text" placeholder="https://api.example.com" />
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:3px" id="base-url-hint"></div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+                  <div class="form-group" style="flex:2;min-width:180px">
+                    <label>Model</label>
+                    <input id="new-key-model" type="text" placeholder="gpt-3.5-turbo" />
+                  </div>
+                  <div class="form-group" style="flex:1;min-width:100px">
+                    <label>Temperature</label>
+                    <input id="new-key-temperature" type="number" step="0.1" min="0" max="2" placeholder="0.7" />
+                  </div>
+                  <div class="form-group" style="flex:1;min-width:100px">
+                    <label>Max Tokens</label>
+                    <input id="new-key-max-tokens" type="number" step="256" min="1" placeholder="4096" />
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top:12px">
+                <button class="btn btn-primary" onclick="addKey()">➕ Add Provider</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <h3>Configured Keys</h3>
+            </div>
+            <div class="section-body">
+              <div class="key-grid" id="keys-grid">
+                <p style="color: var(--text-muted)">Loading...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Monitoring Tab ===== -->
+        <div id="tab-monitoring" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2>Monitoring</h2>
+              <p class="subtitle">
+                Request history and error tracking (auto-refreshes every 10s)
+              </p>
+            </div>
+            <button class="refresh-btn" onclick="loadMonitoring()">
+              ↻ Refresh
+            </button>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <h3>Recent Requests</h3>
+            </div>
+            <div class="section-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Tool</th>
+                      <th>Duration</th>
+                      <th>Status</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody id="request-log"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <h3>Error Log</h3>
+            </div>
+            <div class="section-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Tool</th>
+                      <th>Error Message</th>
+                    </tr>
+                  </thead>
+                  <tbody id="error-log"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Rules & Cache Tab ===== -->
+        <div id="tab-rules" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2>Rules &amp; Cache</h2>
+              <p class="subtitle">
+                Configure rate limits, validation, and caching
+              </p>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <h3>Rate Limiting</h3>
+            </div>
+            <div class="section-body">
+              <p
+                style="color: var(--text-muted); margin-bottom: 16px"
+                id="rl-desc"
+              >
+                Loading...
+              </p>
+              <div
+                style="
+                  display: flex;
+                  gap: 12px;
+                  flex-wrap: wrap;
+                  align-items: flex-end;
+                "
+              >
+                <div class="form-group" style="flex: 1; min-width: 120px">
+                  <label>Max Requests</label>
+                  <input id="rl-rate" type="number" value="30" min="1" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 120px">
+                  <label>Per (seconds)</label>
+                  <input id="rl-per" type="number" value="60" min="1" />
+                </div>
+                <button
+                  class="btn btn-primary"
+                  onclick="updateRateLimit()"
+                  style="margin-bottom: 16px"
+                >
+                  Update
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <h3>Metadata Cache</h3>
+              <button class="btn btn-outline btn-sm" onclick="clearCache()">
+                Clear Cache
+              </button>
+            </div>
+            <div class="section-body">
+              <div class="stats-grid" style="margin-bottom: 0">
+                <div class="stat-card">
+                  <div class="label">Cache Hits</div>
+                  <div class="value" id="cache-hits">0</div>
+                </div>
+                <div class="stat-card">
+                  <div class="label">Cache Misses</div>
+                  <div class="value" id="cache-misses">0</div>
+                </div>
+                <div class="stat-card">
+                  <div class="label">Cache Size</div>
+                  <div class="value" id="cache-size">0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Apps Tab ===== -->
+        <div id="tab-apps" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2>App Access Control</h2>
+              <p class="subtitle">Manage per-app API keys and schema permissions</p>
+            </div>
+            <button class="refresh-btn" onclick="loadApps()">↻ Refresh</button>
+          </div>
+
+          <!-- Create New App Form -->
+          <div class="section">
+            <div class="section-header">Create New App</div>
+            <div class="section-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group">
+                  <label>App ID (slug)</label>
+                  <input id="new-app-id" type="text" placeholder="e.g. hr-dashboard" />
+                </div>
+                <div class="form-group">
+                  <label>Description</label>
+                  <input id="new-app-description" type="text" placeholder="e.g. HR read-only access" />
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top:12px">
+                <label>Role</label>
+                <select id="new-app-role" style="padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:14px;background:var(--bg-card);color:var(--text-primary)">
+                  <option value="read">🔒 Read Only — can only query data</option>
+                  <option value="write">✏️ Read + Write — can query, insert, update, delete</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-top:12px">
+                <label>
+                  Allowed Tables
+                  <button class="btn btn-outline btn-sm" onclick="reloadSchema()" style="margin-left:8px;font-size:11px">↻ Reload from Hasura</button>
+                </label>
+                <div id="schema-tables-container" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:10px;background:var(--bg-input)">
+                  <div style="color:var(--text-muted);font-size:13px">Click "Reload from Hasura" to load available tables</div>
+                </div>
+              </div>
+
+              <button class="btn btn-primary" onclick="createApp()" style="margin-top:12px">➕ Create App</button>
+            </div>
+          </div>
+
+          <!-- App List -->
+          <div class="section">
+            <div class="section-header">Registered Apps</div>
+            <div class="section-body">
+              <div id="apps-list">
+                <div style="text-align:center;color:var(--text-muted);padding:20px">Loading apps...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- New App Key Display (hidden by default) -->
+          <div id="new-app-key-display" style="display:none">
+            <div class="section" style="border:2px solid var(--success)">
+              <div class="section-body" style="text-align:center;padding:24px">
+                <div style="font-size:32px;margin-bottom:12px">🔑</div>
+                <h3 style="color:var(--success);margin-bottom:8px">App Created Successfully!</h3>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Copy the API key below — it will only be shown once.</p>
+                <div style="display:flex;align-items:center;gap:8px;justify-content:center">
+                  <code id="new-app-key-value" style="background:var(--bg-input);padding:10px 16px;border-radius:var(--radius-sm);font-size:14px;color:var(--text-primary);letter-spacing:0.5px"></code>
+                  <button class="btn btn-outline btn-sm" onclick="copyAppKey()">📋 Copy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Chat Tab ===== -->
+        <div id="tab-chat" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2>Chat</h2>
+              <p class="subtitle">Test PromptQL queries in real-time</p>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="clearChat()">🗑 Clear</button>
+          </div>
+
+          <div id="chat-not-configured" style="display:none">
+            <div class="section">
+              <div class="section-body" style="text-align:center;padding:48px 20px">
+                <div style="font-size:48px;margin-bottom:16px">⚙️</div>
+                <h3 style="margin-bottom:8px;color:var(--text-primary)">Server Not Configured</h3>
+                <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px">
+                  Please set API Key and Base URL in the
+                  <a href="#" onclick="switchTab('config');return false" style="color:var(--accent);text-decoration:none">Configuration</a>
+                  tab before using chat.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div id="chat-container" style="display:none">
+            <div class="section" style="height:calc(100vh - 240px);display:flex;flex-direction:column">
+              <div style="padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:10px;background:var(--bg-card-hover)">
+                <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">Mode:</label>
+                <select id="chat-mode" style="padding:5px 8px;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:13px;background:var(--bg-card);color:var(--text-primary)">
+                  <option value="auto">Auto (prefer LLM)</option>
+                  <option value="llm">LLM Direct</option>
+                  <option value="promptql">PromptQL</option>
+                </select>
+                <span id="chat-mode-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg-input);color:var(--text-muted)"></span>
+                
+                <div style="width:1px;height:20px;background:var(--border-color);margin:0 4px"></div>
+                
+                <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">Test as App:</label>
+                <select id="chat-app-selector" style="padding:5px 8px;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:13px;background:var(--bg-card);color:var(--text-primary);min-width:150px">
+                  <option value="">Default (Config)</option>
+                </select>
+                <span id="chat-app-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg-input);color:var(--text-muted)"></span>
+              </div>
+              <div id="chat-messages" style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px">
+                <div style="text-align:center;color:var(--text-muted);font-size:13px;padding:32px">
+                  Send a message to start a conversation with PromptQL
+                </div>
+              </div>
+              <div style="padding:14px 20px;border-top:1px solid var(--border-color);background:var(--bg-card-hover)">
+                <div style="display:flex;gap:8px">
+                  <input id="chat-input" type="text" placeholder="Type your message..."
+                         style="flex:1;padding:10px 14px;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:14px;font-family:Inter,sans-serif;background:var(--bg-card);color:var(--text-primary)"
+                         onkeydown="if(event.key==='Enter')sendChat()" />
+                  <button id="chat-send-btn" class="btn btn-primary" onclick="sendChat()">Send ➤</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script type="module" src="/static/js/app.js"></script>
+  </body>
+</html>

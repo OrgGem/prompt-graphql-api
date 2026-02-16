@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+﻿from setuptools import setup, find_packages
 
 setup(
     name="promptql-mcp-server",
@@ -20,10 +20,27 @@ setup(
         "mcp>=0.5.0",
         "requests>=2.28.0",
         "python-dotenv>=1.0.0",
+        "cryptography>=41.0.0",
+        "keyring>=24.0.0",
+        "pydantic>=2.0.0",
+        "httpx>=0.24.0",
+        "cachetools>=5.3.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
+            "pytest-asyncio>=0.21.0",
+            "responses>=0.23.0",
+        ],
+        "dashboard": [
+            "fastapi>=0.100.0",
+            "uvicorn>=0.20.0",
+        ],
+    },
     entry_points={
         "console_scripts": [
-            "promptql-mcp=promptql_mcp_server.__main__:main",
+            "promptql-mcp=pgql.__main__:main",
         ],
     },
 )

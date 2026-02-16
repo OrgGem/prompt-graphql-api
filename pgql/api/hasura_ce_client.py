@@ -1,7 +1,10 @@
-import logging
+﻿import logging
 from typing import Dict, Optional
 
 import requests
+
+from pgql.utils.cache import cached
+from pgql.utils.config_utils import TimeoutConfig
 
 logger = logging.getLogger("hasura_ce_client")
 
@@ -13,7 +16,7 @@ class HasuraCEClient:
         self.graphql_endpoint = graphql_endpoint.rstrip("/")
         self.metadata_endpoint = self.graphql_endpoint.rsplit("/v1/graphql", 1)[0] + "/v1/metadata"
         self.admin_secret = admin_secret
-        self.timeout = timeout
+        self.timeout = timeout or TimeoutConfig.get_request_timeout()
 
     def _headers(self, role: Optional[str] = None) -> Dict[str, str]:
         headers: Dict[str, str] = {"Content-Type": "application/json"}
@@ -23,7 +26,9 @@ class HasuraCEClient:
             headers["x-hasura-role"] = role
         return headers
 
+    @cached(lambda self: f"hasura_metadata:{self.metadata_endpoint}")
     def export_metadata(self) -> Dict:
+        """Export Hasura metadata (cached for 5 minutes)."""
         response = requests.post(
             self.metadata_endpoint,
             headers=self._headers(),

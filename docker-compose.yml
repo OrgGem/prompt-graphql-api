@@ -1,45 +1,125 @@
 services:
-  prompt-graphql-server:
+  # ==============================================
+  # Admin Dashboard (Primary Service)
+  # Access: http://localhost:8765
+  # ==============================================
+  pgql-dashboard:
     build:
       context: .
       dockerfile: Dockerfile
-    image: prompt-graphql-server:local
-    container_name: prompt-graphql-server
+    image: pgql-server:latest
+    container_name: pgql-dashboard
     restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-8765}:8765"
     environment:
+      # Dashboard Security
+      DASHBOARD_API_KEY: ${DASHBOARD_API_KEY:-my-dashboard-secret-2024}
+      DASHBOARD_CORS_ORIGINS: ${DASHBOARD_CORS_ORIGINS:-http://localhost:8765}
+
+      # PromptQL Server Config (also configurable via Dashboard UI)
       PROMPTQL_API_KEY: ${PROMPTQL_API_KEY:-}
-      PROMPTQL_PLAYGROUND_URL: ${PROMPTQL_PLAYGROUND_URL:-}
+      PGQL_BASE_URL: ${PGQL_BASE_URL:-http://localhost:8765}
       PROMPTQL_AUTH_TOKEN: ${PROMPTQL_AUTH_TOKEN:-}
       PROMPTQL_AUTH_MODE: ${PROMPTQL_AUTH_MODE:-public}
-      PROMPTQL_HASURA_GRAPHQL_ENDPOINT: ${PROMPTQL_HASURA_GRAPHQL_ENDPOINT:-}
-      PROMPTQL_HASURA_ADMIN_SECRET: ${PROMPTQL_HASURA_ADMIN_SECRET:-}
 
+      # Hasura CE Connection
+      PROMPTQL_HASURA_GRAPHQL_ENDPOINT: ${PROMPTQL_HASURA_GRAPHQL_ENDPOINT:-http://hasura:8080/v1/graphql}
+      PROMPTQL_HASURA_ADMIN_SECRET: ${PROMPTQL_HASURA_ADMIN_SECRET:-myadminsecretkey}
+    volumes:
+      - dashboard-data:/app/data
+    networks:
+      - pgql-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==============================================
+  # MCP Server (stdio mode - for MCP clients only)
+  # Start with: docker-compose --profile mcp up -d
+  # ==============================================
+  pgql-mcp-server:
+    image: pgql-server:latest
+    container_name: pgql-mcp-server
+    profiles: ["mcp"]
+    command: ["run"]
+    stdin_open: true
+    tty: true
+    environment:
+      PROMPTQL_API_KEY: ${PROMPTQL_API_KEY:-}
+      PGQL_BASE_URL: ${PGQL_BASE_URL:-http://localhost:8765}
+      PROMPTQL_AUTH_TOKEN: ${PROMPTQL_AUTH_TOKEN:-}
+      PROMPTQL_AUTH_MODE: ${PROMPTQL_AUTH_MODE:-public}
+      PROMPTQL_HASURA_GRAPHQL_ENDPOINT: ${PROMPTQL_HASURA_GRAPHQL_ENDPOINT:-http://hasura:8080/v1/graphql}
+      PROMPTQL_HASURA_ADMIN_SECRET: ${PROMPTQL_HASURA_ADMIN_SECRET:-myadminsecretkey}
+    volumes:
+      - dashboard-data:/app/data
+    networks:
+      - pgql-network
+
+  # ==============================================
+  # PostgreSQL (Sample Hasura Backend)
+  # Start with: docker-compose --profile sample-hasura up -d
+  # ==============================================
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     profiles: ["sample-hasura"]
+    container_name: pgql-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_OR_SERVICE_WILL_FAIL}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
       POSTGRES_DB: ${POSTGRES_DB:-appdb}
     ports:
       - "${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - pgql-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-appdb}"]
       interval: 5s
       timeout: 5s
       retries: 20
 
+  # ==============================================
+  # Hasura GraphQL Engine (Sample Setup)
+  # Console: http://localhost:18080
+  # Admin Secret: myadminsecretkey
+  # ==============================================
   hasura:
     image: hasura/graphql-engine:v2.42.0
     profiles: ["sample-hasura"]
+    container_name: pgql-hasura
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      HASURA_GRAPHQL_DATABASE_URL: ${HASURA_GRAPHQL_DATABASE_URL:-postgresql://postgres:REPLACE_ME_OR_SERVICE_WILL_FAIL@postgres:5432/appdb}
-      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-REPLACE_ME_OR_SERVICE_WILL_FAIL}
-      HASURA_GRAPHQL_ENABLE_CONSOLE: "${HASURA_GRAPHQL_ENABLE_CONSOLE:-false}"
+      HASURA_GRAPHQL_DATABASE_URL: ${HASURA_GRAPHQL_DATABASE_URL:-postgresql://postgres:postgrespassword@postgres:5432/appdb}
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-myadminsecretkey}
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "${HASURA_GRAPHQL_ENABLE_CONSOLE:-true}"
       HASURA_GRAPHQL_DEV_MODE: "${HASURA_GRAPHQL_DEV_MODE:-true}"
       HASURA_GRAPHQL_ENABLED_LOG_TYPES: ${HASURA_GRAPHQL_ENABLED_LOG_TYPES:-startup,http-log,webhook-log,websocket-log,query-log}
     ports:
       - "${HASURA_PORT:-18080}:8080"
+    networks:
+      - pgql-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  pgql-network:
+    driver: bridge
+
+volumes:
+  dashboard-data:
+    driver: local
+  postgres-data:
+    driver: local

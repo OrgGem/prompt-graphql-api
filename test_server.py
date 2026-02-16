@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Quick test script to verify PromptQL MCP server."""
 
 import asyncio
@@ -10,7 +10,7 @@ async def test_server():
     """Test that the server starts and can list tools."""
     server_params = StdioServerParameters(
         command="python",
-        args=["-m", "promptql_mcp_server", "run"],
+        args=["-m", "pgql", "run"],
         env=None
     )
     

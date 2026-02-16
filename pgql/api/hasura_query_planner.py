@@ -1,7 +1,16 @@
 from typing import Dict, List, Optional
 
 
-def _extract_tracked_table_names(metadata: Dict) -> List[str]:
+def _extract_tracked_table_names(
+    metadata: Dict,
+    allowed_tables: Optional[List[str]] = None,
+) -> List[str]:
+    """Extract tracked table names from Hasura metadata.
+
+    Args:
+        metadata: Hasura metadata export
+        allowed_tables: If provided, only include tables in this list
+    """
     tables: List[str] = []
     for source in metadata.get("sources", []):
         for table_info in source.get("tables", []):
@@ -11,18 +20,25 @@ def _extract_tracked_table_names(metadata: Dict) -> List[str]:
             else:
                 name = str(table)
             if name:
+                if allowed_tables is not None and name not in allowed_tables:
+                    continue
                 tables.append(name)
     return tables
 
 
-def plan_prompt_to_graphql(prompt: str, metadata: Dict, max_limit: int = 100) -> Dict:
+def plan_prompt_to_graphql(
+    prompt: str,
+    metadata: Dict,
+    max_limit: int = 100,
+    allowed_tables: Optional[List[str]] = None,
+) -> Dict:
     """
     Lightweight planner for Hasura CE v2:
     - chooses a tracked table using simple keyword matching
     - generates a safe aggregate-count query
     """
     prompt_lower = prompt.lower().strip()
-    tracked_tables = _extract_tracked_table_names(metadata)
+    tracked_tables = _extract_tracked_table_names(metadata, allowed_tables=allowed_tables)
 
     selected_table: Optional[str] = None
     for table in tracked_tables:

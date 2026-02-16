@@ -111,19 +111,21 @@ function renderSchemaCheckboxes(tables, selectedTables = []) {
 
   const selectAllChecked = selectedTables.length === tables.length;
   container.innerHTML = `
-    <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border-color)">
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-bottom:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;font-size:13px">
         <input type="checkbox" id="schema-select-all" onchange="toggleAllTables(this.checked)" ${selectAllChecked ? "checked" : ""} />
-        Select All (${tables.length} tables)
+        <span>Select All</span>
       </label>
+      <span class="badge info" style="font-size:11px">${tables.length} tables</span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px">
+    <div style="max-height:280px;overflow-y:auto;border:1px solid var(--border-color);border-radius:0 0 var(--radius-sm) var(--radius-sm)">
       ${tables
+        .sort((a, b) => a.localeCompare(b))
         .map(
           (t) => `
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;padding:4px">
-          <input type="checkbox" class="schema-table-cb" value="${escapeHtml(t)}" ${selectedTables.includes(t) ? "checked" : ""} />
-          ${escapeHtml(t)}
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--border-color);transition:background 0.15s;font-size:13px" onmouseover="this.style.background='var(--bg-card-hover)'" onmouseout="this.style.background='var(--bg-card)'">
+          <input type="checkbox" class="schema-table-cb" value="${escapeHtml(t)}" ${selectedTables.includes(t) ? "checked" : ""} style="margin:0;flex-shrink:0" />
+          <span style="color:var(--text-primary);flex:1">${escapeHtml(t)}</span>
         </label>`
         )
         .join("")}
@@ -232,14 +234,19 @@ export async function editApp(appId) {
 
         <div class="form-group" style="margin-top:12px">
           <label>Allowed Tables</label>
-          <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:10px;background:var(--bg-input)">
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px">
-              ${tables.map((t) => `
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;padding:4px">
-                  <input type="checkbox" class="edit-table-cb" value="${escapeHtml(t)}" ${(app.allowed_tables || []).includes(t) ? "checked" : ""} />
-                  ${escapeHtml(t)}
-                </label>`).join("")}
-            </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-bottom:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0;margin-top:8px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;font-size:13px;margin:0">
+              <input type="checkbox" id="edit-select-all" onchange="document.querySelectorAll('.edit-table-cb').forEach(cb => cb.checked = this.checked)" />
+              <span>Select All</span>
+            </label>
+            <span class="badge info" style="font-size:11px">${tables.length} tables</span>
+          </div>
+          <div style="max-height:280px;overflow-y:auto;border:1px solid var(--border-color);border-radius:0 0 var(--radius-sm) var(--radius-sm)">
+            ${tables.sort((a, b) => a.localeCompare(b)).map((t) => `
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--border-color);transition:background 0.15s;font-size:13px" onmouseover="this.style.background='var(--bg-card-hover)'" onmouseout="this.style.background='var(--bg-card)'">
+                <input type="checkbox" class="edit-table-cb" value="${escapeHtml(t)}" ${(app.allowed_tables || []).includes(t) ? "checked" : ""} style="margin:0;flex-shrink:0" />
+                <span style="color:var(--text-primary);flex:1">${escapeHtml(t)}</span>
+              </label>`).join("")}
           </div>
         </div>
 

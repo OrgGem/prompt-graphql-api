@@ -39,3 +39,41 @@ async def reset_metrics():
     """Reset all metrics counters."""
     request_metrics.reset()
     return {"message": "Metrics reset successfully"}
+
+
+@router.get("/logs/dates")
+async def get_log_dates():
+    """Get list of available log dates."""
+    return {
+        "dates": request_metrics.list_available_log_dates()
+    }
+
+
+@router.get("/logs/{date}")
+async def get_log_by_date(date: str, limit: int = 100):
+    """Get log entries for a specific date (YYYY-MM-DD format)."""
+    import re
+    from datetime import datetime
+    
+    # Validate date format to prevent path traversal
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid date format. Use YYYY-MM-DD"
+        )
+    
+    # Validate date is actually valid
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid date")
+    
+    entries = request_metrics.get_daily_log(date, limit)
+    return {
+        "date": date,
+        "entries": entries,
+        "total": len(entries)
+    }
+

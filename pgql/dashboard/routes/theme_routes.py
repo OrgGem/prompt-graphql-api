@@ -224,7 +224,7 @@ async def get_favicon():
         mime = m.group(1) if m else "image/png"
         try:
             raw = base64.b64decode(data)
-        except Exception:
+        except (base64.binascii.Error, ValueError):
             # Corrupted base64 — fall back to default
             return Response(content=_DEFAULT_FAVICON_SVG, media_type="image/svg+xml",
                             headers={"Cache-Control": "public, max-age=3600"})

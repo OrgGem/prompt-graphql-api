@@ -28,25 +28,20 @@ export function logout() {
 
 // --- API Fetch Wrapper ---
 export async function api(path, options = {}) {
-  try {
-    const key = getDashboardKey();
-    const headers = {
-      "Content-Type": "application/json",
-      ...(key ? { "X-Dashboard-Key": key } : {}),
-      ...options.headers,
-    };
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-    if (res.status === 401) {
-      showLoginPrompt();
-      throw new Error("Authentication required");
-    }
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || "Request failed");
-    }
-    return await res.json();
-  } catch (e) {
-    console.error(`API ${path}:`, e);
-    throw e;
+  const key = getDashboardKey();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(key ? { "X-Dashboard-Key": key } : {}),
+    ...options.headers,
+  };
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (res.status === 401) {
+    showLoginPrompt();
+    throw new Error("Authentication required");
   }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Request failed");
+  }
+  return await res.json();
 }

@@ -52,7 +52,7 @@ class LLMClient:
 
         messages.append({"role": "user", "content": message})
 
-        url = f"{self.base_url}/v1/chat/completions"
+        url = f"{self.base_url}/chat/completions" if self.base_url.rstrip("/").endswith("/v1") else f"{self.base_url}/v1/chat/completions"
         headers = {
             "Content-Type": "application/json",
         }
@@ -74,7 +74,7 @@ class LLMClient:
                 error_detail = ""
                 try:
                     error_detail = resp.json().get("error", {}).get("message", resp.text[:300])
-                except Exception:
+                except (ValueError, KeyError):
                     error_detail = resp.text[:300]
                 return {
                     "success": False,
@@ -102,6 +102,9 @@ class LLMClient:
             return {"success": False, "error": "LLM request timed out (120s)"}
         except requests.exceptions.ConnectionError as e:
             return {"success": False, "error": f"Cannot connect to LLM API at {self.base_url}: {e}"}
+        except json.JSONDecodeError as e:
+            logger.error(f"LLM response parse error: {e}")
+            return {"success": False, "error": f"Failed to parse LLM response: {e}"}
         except Exception as e:
-            logger.error(f"LLM client error: {e}")
+            logger.error(f"LLM client unexpected error: {e}", exc_info=True)
             return {"success": False, "error": f"LLM error: {str(e)}"}

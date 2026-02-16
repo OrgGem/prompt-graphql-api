@@ -1,0 +1,71 @@
+# ============================================
+# Docker Compose TEST - PostgreSQL with sample data + Hasura
+# Usage: docker compose -f docker-compose.test.yml up -d
+# ============================================
+# Hasura Console: http://localhost:18080
+# Admin Secret:   myadminsecretkey
+# PostgreSQL:     localhost:15432 (user: postgres / pass: postgrespassword / db: testdb)
+# ============================================
+
+services:
+  # ==============================================
+  # PostgreSQL with sample data
+  # ==============================================
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: pgql-postgres-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+      POSTGRES_DB: ${POSTGRES_DB:-testdb}
+    ports:
+      - "${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-testdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ==============================================
+  # Hasura GraphQL Engine
+  # Console: http://localhost:18080
+  # Admin Secret: myadminsecretkey
+  # ==============================================
+  hasura-test:
+    image: hasura/graphql-engine:v2.42.0
+    container_name: pgql-hasura-test
+    restart: unless-stopped
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrespassword}@postgres-test:5432/${POSTGRES_DB:-testdb}
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-myadminsecretkey}
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_DEV_MODE: "true"
+      HASURA_GRAPHQL_ENABLED_LOG_TYPES: startup,http-log,webhook-log,websocket-log,query-log
+      # Auto-track all tables when connected
+      HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
+    ports:
+      - "${HASURA_PORT:-18080}:8080"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  postgres-test-data:
+    driver: local

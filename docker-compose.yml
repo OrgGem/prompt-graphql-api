@@ -61,7 +61,7 @@ services:
       - pgql-network
 
   # ==============================================
-  # PostgreSQL (Sample Hasura Backend)
+  # PostgreSQL (Hasura Backend - Clean DB)
   # Start with: docker-compose --profile sample-hasura up -d
   # ==============================================
   postgres:
@@ -114,6 +114,35 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==============================================
+  # PostgreSQL Sample DB (Separate from Hasura DB)
+  # Start with: docker-compose --profile sample-data up -d
+  # Contains: users, categories, articles, tags, comments,
+  #           products, orders (auto-loaded from ./initdb/)
+  # Connection: localhost:25432 (postgres / postgrespassword / sampledb)
+  # ==============================================
+  postgres-sample:
+    image: postgres:15-alpine
+    profiles: ["sample-data"]
+    container_name: pgql-postgres-sample
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: sampledb
+    ports:
+      - "25432:5432"
+    volumes:
+      - postgres-sample-data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    networks:
+      - pgql-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sampledb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 networks:
   pgql-network:
     driver: bridge
@@ -122,4 +151,6 @@ volumes:
   dashboard-data:
     driver: local
   postgres-data:
+    driver: local
+  postgres-sample-data:
     driver: local

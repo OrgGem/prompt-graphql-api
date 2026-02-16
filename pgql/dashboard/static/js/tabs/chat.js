@@ -57,7 +57,7 @@ export async function loadChatApps() {
       }
     };
   } catch (e) {
-    console.error("Failed to load apps for chat:", e);
+    // Silent fail — apps list is optional for chat
   }
 }
 
